@@ -21,8 +21,17 @@ Browser access from another machine needs a hosts entry (`127.0.0.1 keycloak`) p
 - `mocks/`  stand-ins for external systems (URSB, NGO Bureau, ProGres v4 auth, UGPass, AMP, NIMES); stdlib Python; every response says `"mock": true`.
 - `scripts/`  `bootstrap-ubuntu.sh`, `seed-iam.sh`, `probe_api.py`, `test_assistance.py`, `run_demo.py` (demo runner, PASS/FAIL/NOT IMPLEMENTED per step).
 
+## Using it from the UI
+Open http://localhost:3000 and sign in (dev only): `admin`/`admin` to enter data. Changes to existing records and new intake records need two approvals:
+sign in as `alex.carter`/`alex.carter-pass` (stage 1), then `nina.patel`/`nina.patel-pass` (stage 2), and approve from the approvals list.
+- **Partners:** register a partner via intake (organisation name, URSB number, NGO permit number). After final approval the registry calls the URSB and NGO Bureau mocks and records compliance status and a permit renewal alert date.
+- **Individuals:** the ID Renewal tab records expiry flagged / appointment booked / closed; each approved status change sends an SMS through the mock SMS service.
+- **Assistance tab:** add an assistance row; at approval the registry calls the mock ProGres authentication and records the result. Duplicate (ProGres ID, type, cycle) is rejected.
+Mock URSB numbers/permits accepted: see `mocks/server.py`. Everything external is a mock and says so in its response.
+
 ## Status
-Working on the dev stack (verified by hand): stack boots; extension migrates; assistance events can be added by change request;
-the duplicate-assistance rule (same ProGres ID + assistance type + cycle) is enforced at approval.
-Not built yet: external-system mocks (ProGres, UGPass, URSB, NGO Bureau, AMP, NIMES), the demo-screen runner, offline handover ingest,
-UI labels/translations, ID renewal, self-reliance survey, national dashboard. Not verified: login to the staff UI with `admin`/`admin`.
+Verified in an automated run against a fresh stack (`run-demo.sh`, test harness only): Partner intake + compliance check (compliant and non-compliant cases),
+assistance entry with ProGres authentication recorded, ID renewal with SMS, two-stage approvals.
+**Assumptions:** the permit alert date is 60 days before permit expiry (not from the demo); assistance type values are my own list.
+**Not built:** expiry scan/reminder is manual (no scheduled job), map overlap check, offline field app/GPS, real SMS, self-reliance survey (screen 8), national dashboard.
+**Not verified in a real browser:** rendering of the new dropdowns and list columns; whether Save enables on a section with no pending change request.
