@@ -27,3 +27,10 @@ Status: nothing here has been run yet.
   deduplicate_schema EXACT on registrant_progres_id (0.4) + assistance_type (0.3) + distribution_cycle (0.3).
 - Open questions to verify on the VM: that dedup runs for child-table registers on change request/ingest, and what the API returns for a match.
 - UI labels have no translations yet (screens will show keys).
+
+## Finding 2 (upstream, 2026-11-16): staff-api base images fail to boot
+Published `openg2p/openg2p-registry-staff-api` `0.0.0-develop.716` and `1.2.1` both crash: `iam-core@509f7ec`
+imports `openg2p_fastapi_common.utils.crypto`, but bundled `openg2p-fastapi-common@02a8c18` exposes
+`openg2p_fastapi_common.crypto`. Verified on the VM with `python -c "import openg2p_fastapi_common.utils.crypto"` on
+both bare base images. Our workaround reinstalls iam-core@8f02f18 (--no-deps) in docker/staff-api/Dockerfile.
+Not yet reported upstream. Unverified: whether other iam-core consumers or the bene/agent portals are affected.
