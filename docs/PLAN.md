@@ -48,3 +48,9 @@ approved -> two identical rows. Likely reason (not fully verified): register ded
 G2PRegisterDomainServiceAssistanceEvent rejects duplicates at approval time (untested as of this commit).
 Open: the intake/ingest path (offline handover, 214 records) may not call pre_approve -- must be tested; creation-time rejection
 (instead of approval-time) is not possible with the hooks found so far.
+
+## Finding 5 (2026-11-16): a change request that fails approval stays PENDING and blocks the record
+The duplicate rule rejects at approval (pre_approve raises), but the change request itself remains PENDING, and registry-core allows only one
+pending CR per record+section ("A pending change request already exists..."). Callers must call /change-requests/reject_change_request
+(change_request_id + rejection_reason) after a failed approval. Also means assistance events attached to the same parent are serialised.
+Open: whether the real partner/field-app flow should reject automatically (e.g. in the ingest worker) rather than leave it to the caller.
