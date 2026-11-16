@@ -91,6 +91,11 @@ from .enums import (
     VerificationStatusEnum,
     WaterSourceTypeEnum,
 )
+from .id_renewal_request import (
+    G2PRegisterIdRenewalRequest,
+    G2PRegisterHistoryIdRenewalRequest,
+    G2PIntakeFormIdRenewalRequest,
+)
 from .assistance_event import (
     G2PRegisterAssistanceEvent,
     G2PRegisterHistoryAssistanceEvent,

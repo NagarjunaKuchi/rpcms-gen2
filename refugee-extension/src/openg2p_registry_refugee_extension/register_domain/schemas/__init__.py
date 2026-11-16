@@ -58,6 +58,11 @@ from .individual_vulnerability import (
     G2PRegisterHistorySchemaIndividualVulnerability,
     G2PIntakeFormSchemaIndividualVulnerability,
 )
+from .id_renewal_request import (
+    G2PRegisterSchemaIdRenewalRequest,
+    G2PRegisterHistorySchemaIdRenewalRequest,
+    G2PIntakeFormSchemaIdRenewalRequest,
+)
 from .assistance_event import (
     G2PRegisterSchemaAssistanceEvent,
     G2PRegisterHistorySchemaAssistanceEvent,

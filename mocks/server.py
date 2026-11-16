@@ -13,7 +13,7 @@ from urllib.parse import parse_qs, urlparse
 
 KEY = secrets.token_bytes(32)
 LOCK = threading.Lock()
-DOCS, SIGREQS, EXPENDITURE, INDICATORS = {}, {}, [], []
+DOCS, SIGREQS, EXPENDITURE, INDICATORS, SMS = {}, {}, [], [], []
 
 URSB = {"80020003318742": {"registration_no": "80020003318742", "name": "Nile Hope Uganda", "type": "NGO (company limited by guarantee)", "status": "ACTIVE"}}
 NGO_BUREAU = {"NGO/PMT/2025/4418": {"permit_no": "NGO/PMT/2025/4418", "holder": "Nile Hope Uganda", "status": "VALID", "valid_to": "2027-12-31", "sectors": ["Food security", "Livelihoods"]}}
@@ -61,6 +61,9 @@ class H(BaseHTTPRequestHandler):
         if p == "/ngobureau/v1/permits":
             r = NGO_BUREAU.get(q.get("permit_no", ""))
             return self._send(200, r) if r else self._send(404, {"error": "not found"})
+        if p == "/sms/v1/messages":
+            to = q.get("to", "")
+            return self._send(200, {"messages": [m for m in SMS if not to or m["to"] == to]})
         if p.startswith("/amp/v1/records/"):
             r = AMP.get(p.rsplit("/", 1)[1])
             return self._send(200, r) if r else self._send(404, {"error": "not found"})
@@ -120,6 +123,12 @@ class H(BaseHTTPRequestHandler):
                     return self._send(404, {"error": "unknown doc"})
                 d["text"] = str(b.get("text", ""))
                 return self._send(200, {"changed": True})
+            if p == "/sms/v1/messages":  # MOCK: nothing is sent to any phone; messages are only stored for the demo
+                if not b.get("to") or not b.get("text"):
+                    return self._send(400, {"error": "to and text are required"})
+                SMS.append({"id": f"SMS-{len(SMS) + 1:05d}", "to": b["to"], "text": b["text"], "scheduled_for": b.get("scheduled_for"),
+                            "ref": b.get("ref"), "queued_at": now(), "mock": True})
+                return self._send(202, {"queued": True, "id": SMS[-1]["id"]})
             if p == "/amp/v1/expenditure":
                 EXPENDITURE.append(b)
                 return self._send(202, {"accepted": True, "reference": f"AMP-EXP-{len(EXPENDITURE):05d}", "records": len(b.get("items", []) or [])})

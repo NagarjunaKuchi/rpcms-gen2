@@ -22,7 +22,7 @@ from helpers.config import Config, REGISTER_INDIVIDUAL  # noqa: E402
 from helpers.http import StaffClient, StaffApiError  # noqa: E402
 from helpers.flows.intake import provision_household, provision_record  # noqa: E402
 from helpers.flows.change_request import verify_and_approve_cr  # noqa: E402
-from helpers.flows.register import search_register_by_text  # noqa: E402
+from helpers.flows.register import search_register_by_text, get_subject_record  # noqa: E402
 from helpers.profiles import INDIVIDUAL  # noqa: E402
 import helpers.flows.intake as _intake  # noqa: E402
 
@@ -30,6 +30,9 @@ AE = "b0000000-0000-4000-8000-0000000000a0"
 TAB, SECTION = "individual_assistance_tab", "in_table_assistance_events"
 CYCLE, ATYPE, AMOUNT = "2026-03", "CASH_FOR_FOOD", 150000
 MARY, NEIGHBOUR = "UGA-00423318", "UGA-00419907"
+IR = "b0000000-0000-4000-8000-0000000000a1"
+IR_TAB, IR_SECTION = "individual_id_renewal_tab", "in_table_id_renewals"
+DEMO_TODAY, EXPIRY_WINDOW_DAYS = date(2026, 9, 22), 60   # demo date for screen 7; the 60-day window is OUR assumption
 RESULTS = []
 
 
@@ -85,6 +88,28 @@ def add_and_approve(staff, parent_id, ev):
         return str(e)
 
 
+def ir_change(staff, parent_id, row, action):
+    """ADD or UPDATE one ID-renewal request row via a change request; returns 'APPROVED' or the rejection text."""
+    item = dict(row, edit_action=action, link_internal_record_id=parent_id)
+    body = staff.post_json("/change-requests/create_change_request", {
+        "register_id": REGISTER_INDIVIDUAL, "tab_id": IR_TAB, "section_id": IR_SECTION, "section_register_id": IR,
+        "internal_record_id": parent_id, "change_payload": [item]})
+    cr = staff.payload(body)["change_request_id"]
+    try:
+        verify_and_approve_cr(staff, cr)
+        return "APPROVED"
+    except StaffApiError as e:
+        try:
+            staff.post_json("/change-requests/reject_change_request", {"change_request_id": cr, "rejection_reason": str(e)[:480]})
+        except StaffApiError:
+            pass
+        return str(e)
+
+
+def sms(to, text, when=None, ref=None):
+    mock("POST", "/sms/v1/messages", {"to": to, "text": text, "scheduled_for": when, "ref": ref})
+
+
 def find_events(staff, progres_id):
     """Pre-handover duplicate check: search the shared assistance register by ProGres ID (record name starts with it)."""
     hits = search_register_by_text(staff, progres_id, register_id=AE, page_size=50)
@@ -137,7 +162,7 @@ def main():
             sys.exit("Demo ProGres IDs already have events: this stack is not fresh. Run ./reset.sh && ./deploy.sh, then retry.")
         hh = provision_household(staff, cfg).internal_record_id
         hh2 = provision_household(staff, cfg).internal_record_id
-        mary_rec = provision_person(staff, cfg, hh, "Mary", "Poni", MARY, "2026-03-31")
+        mary_rec = provision_person(staff, cfg, hh, "Mary", "Poni", MARY, "2026-10-31")
         nbr_rec = provision_person(staff, cfg, hh2, "Joseph", "Lado", NEIGHBOUR, "2027-06-30")
         batch_rec = provision_person(staff, cfg, hh2, "Zone3", "OfflineBatch", "UGA-0000000", "2030-01-01")
         print(f"  (set-up) Mary Poni {mary_rec} ({MARY}), Joseph Lado {nbr_rec} ({NEIGHBOUR}) created via intake + approval")
@@ -181,7 +206,56 @@ def main():
         step("6", "Offline-first phone sync, GPS capture", "NOT IMPLEMENTED", "no field app; GPS not captured in the register")
 
     # ---- Screens 7, 8, 9, 10 ---------------------------------------------------------------------------------
-    step("7", "ID expiry flag, appointment, SMS", "NOT IMPLEMENTED", "needs ProGres-ID expiry field + Novu/notifications")
+    # ---- Screen 7: ID expiry flag, appointment, SMS (RPCMS flags/books/informs; renewal happens in ProGres v4) ----
+    with StaffClient.login(cfg) as staff:
+        REQ = "REQ-BDB-2026-11842"
+        hits = search_register_by_text(staff, "UGA-", register_id=REGISTER_INDIVIDUAL, page_size=50)
+        due = []
+        for h in hits:
+            rec = get_subject_record(staff, INDIVIDUAL, h["internal_record_id"])
+            exp = str(rec.get("progres_card_expiry") or "")[:10]
+            if exp and rec.get("progres_id"):
+                days = (date.fromisoformat(exp) - DEMO_TODAY).days
+                if 0 <= days <= EXPIRY_WINDOW_DAYS:
+                    due.append((h["internal_record_id"], rec["progres_id"], exp, days))
+        ok = any(d[1] == MARY for d in due) and not any(d[1] == NEIGHBOUR for d in due)
+        step("7", f"Cards expiring within {EXPIRY_WINDOW_DAYS} days of {DEMO_TODAY} found from the registry", "PASS" if ok else "FAIL",
+             "; ".join(f"{d[1]} expires {d[2]} ({d[3]} days)" for d in due) or f"none found ({len(hits)} people searched)")
+        if ok:
+            pid, progres, exp, days = [d for d in due if d[1] == MARY][0]
+            r = ir_change(staff, pid, dict(request_ref=REQ, registrant_progres_id=progres, service_type="ID_RENEWAL", status="EXPIRY_FLAGGED",
+                                           card_expiry=exp, flagged_on=str(DEMO_TODAY)), "ADD")
+            step("7", "Expiry flagged: renewal request created", "PASS" if r == "APPROVED" else "FAIL", "" if r == "APPROVED" else r[:200])
+            sms(progres, "OPM Refugees: Your refugee ID expires on 31 Oct 2026. Please book a renewal appointment at the Bidibidi service centre.", str(DEMO_TODAY), REQ)
+            _, a2 = mock("POST", "/progres/v4/authenticate", {"progres_id": progres, "biometric": {"modality": "FACE", "capture": "service-centre"}})
+            time.sleep(3)
+            rows = search_register_by_text(staff, REQ, register_id=IR, page_size=10)
+            rid = rows[0]["internal_record_id"] if rows else None
+            step("7", "Request findable in the registry by its reference", "PASS" if rid else "FAIL")
+            if rid and a2["authenticated"]:
+                r = ir_change(staff, pid, dict(internal_record_id=rid, status="APPOINTMENT_BOOKED", appointment_date="2026-10-14",
+                                               appointment_time="10:00", appointment_location="OPM office Bidibidi"), "UPDATE")
+                step("7", "Appointment booked after ProGres authentication (mock)", "PASS" if r == "APPROVED" else "FAIL", "" if r == "APPROVED" else r[:200])
+                sms(progres, f"Renewal appointment booked: 14 Oct, 10:00, OPM office Bidibidi. Bring your current ID. Ref {REQ}.", str(DEMO_TODAY), REQ)
+                sms(progres, "Reminder: your ID renewal appointment is tomorrow at 10:00.", "2026-10-13", REQ)
+                # the renewal itself happens OUTSIDE RPCMS (ProGres v4); the OPM officer closes the request here
+                r = ir_change(staff, pid, dict(internal_record_id=rid, status="CLOSED_RENEWED", closed_on="2026-10-14",
+                                               closed_by="OPM registration officer"), "UPDATE")
+                step("7", "Request closed by the OPM officer (renewal done outside RPCMS)", "PASS" if r == "APPROVED" else "FAIL", "" if r == "APPROVED" else r[:200])
+                sms(progres, "Your refugee ID renewal is complete. Thank you for visiting OPM Bidibidi.", "2026-10-14", REQ)
+                time.sleep(3)
+                grp = staff.post_json("/register-data/get_tab_records", {"subject_register_id": REGISTER_INDIVIDUAL, "subject_record_id": pid, "tab_id": IR_TAB})
+                groups = staff.payload(grp)
+                groups = groups if isinstance(groups, list) else []
+                recs = [x for g in groups if g.get("section_register_id") == IR for x in (g.get("records") or [])]
+                final = recs[0].get("status") if recs else None
+                step("7", "Stored request ends as CLOSED_RENEWED with appointment details",
+                     "PASS" if len(recs) == 1 and final == "CLOSED_RENEWED" and recs[0].get("appointment_date") else "FAIL", f"rows={len(recs)} status={final}")
+        _, m = mock("GET", "/sms/v1/messages?to=" + MARY)
+        n = len(m.get("messages", []))
+        step("7", "4 SMS queued for Mary (MOCK gateway: nothing is actually sent)", "PASS" if n == 4 else "FAIL", f"{n} queued")
+        step("7", "Real SMS delivery (Novu / telecom gateway)", "NOT IMPLEMENTED", "mock SMS only")
+
     step("8", "Self-reliance survey (offline)", "NOT IMPLEMENTED", "ODK Central not added")
     _, e = mock("POST", "/amp/v1/expenditure", {"period": "2026-Q1", "items": [{"project": "PRJ-BDB-2026-022", "amount": value, "currency": "UGX"}]})
     _, nm = mock("POST", "/nimes/v1/indicators", {"period": "2026-Q1", "indicators": [{"code": "assistance_events", "value": approved + 1}]})
