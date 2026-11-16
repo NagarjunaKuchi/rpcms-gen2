@@ -62,5 +62,3 @@ with StaffClient.login(cfg) as staff:
                     say(f"approve step error: {e}")
         except StaffApiError as e:
             say(f"create_change_request error: {e}")
-print("\nNow run:  docker compose exec postgres psql -U postgres -d registry -c "
-      "\"select registrant_progres_id, assistance_type, distribution_cycle, partner_code from g2p_register_assistance_event;\"")

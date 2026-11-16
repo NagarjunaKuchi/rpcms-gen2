@@ -558,6 +558,19 @@ services:
       redis:
         condition: service_healthy
 
+  mocks:
+    # MOCKS of external systems (URSB, NGO Bureau, ProGres v4 auth, UGPass, AMP, NIMES). Dev only.
+    build:
+      context: ../mocks
+    image: rpcms-mocks:local
+    ports:
+      - "18100:8000"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
   db-seed:
     # Reference meta SQL + entrypoint from this workspace.
     # Published rc images omit load_sample_data.py by design — keep

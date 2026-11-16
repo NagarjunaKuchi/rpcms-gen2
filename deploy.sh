@@ -18,7 +18,7 @@ fi
 if ! docker info >/dev/null 2>&1; then
   echo "Cannot talk to Docker. If you were just added to the 'docker' group, log out and back in. Do not use sudo." >&2; exit 1
 fi
-for p in 3000 15432 18080 18081 18082 18083 18090 18091; do
+for p in 3000 15432 18080 18081 18082 18083 18090 18091 18100; do
   if ss -ltn 2>/dev/null | awk '{print $4}' | grep -q ":${p}\$"; then
     # ignore if it is our own stack
     if ! docker ps --format '{{.Names}} {{.Ports}}' | grep -q "deploy-.*:${p}->"; then
@@ -57,17 +57,10 @@ sleep 5
 
 if [ "$RUN_TESTS" = 1 ]; then
   log "Smoke tests (reuse registry-platform test helpers @ ${PLATFORM_REF:0:7})"
-  CACHE="$ROOT/.cache"; mkdir -p "$CACHE"
-  if [ ! -d "$CACHE/registry-platform/.git" ]; then
-    git clone -q https://github.com/OpenG2P/registry-platform.git "$CACHE/registry-platform"
-  fi
-  git -C "$CACHE/registry-platform" fetch -q origin "$PLATFORM_REF" 2>/dev/null || git -C "$CACHE/registry-platform" fetch -q origin
-  git -C "$CACHE/registry-platform" checkout -q "$PLATFORM_REF"
-  [ -x "$CACHE/venv/bin/python" ] || python3 -m venv "$CACHE/venv"
-  "$CACHE/venv/bin/pip" install -q httpx python-dotenv
-  export RP_CHECKOUT="$CACHE/registry-platform"
-  "$CACHE/venv/bin/python" scripts/probe_api.py
-  "$CACHE/venv/bin/python" scripts/test_assistance.py | tail -n 12
+  eval "$(bash scripts/prepare-tests.sh)"
+  export RP_CHECKOUT
+  "$PY" scripts/probe_api.py
+  "$PY" scripts/test_assistance.py | tail -n 12
 fi
 
 cat <<EOF
@@ -83,5 +76,6 @@ To use the UI from your PC's browser (dev setup; the stack's Keycloak hostname i
   2. Open an SSH tunnel to the VM (note local 8080 -> Keycloak):
          ssh -L 3000:localhost:3000 -L 8080:localhost:18080 -L 18081:localhost:18081 -L 18082:localhost:18082 <user>@<vm>
   3. Browse http://localhost:3000   (the sign-in page will be at http://keycloak:8080)
+Run the demo use case: ./run-demo.sh   (needs a fresh stack)
 Stop: ./stop.sh     Wipe all data: ./reset.sh
 EOF

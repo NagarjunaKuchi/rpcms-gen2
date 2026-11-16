@@ -80,7 +80,8 @@ class G2PRegisterDomainServiceAssistanceEvent(G2PRegisterDomainService):
         return " ".join(parts).strip()
 
     def construct_record_name(self, payload: dict, extra: list[str] = None) -> str:
-        keys = ["partner_code", "assistance_type", "distribution_cycle"]
+        # ProGres ID first: the record name is what search results show, and the pre-handover duplicate check reads it.
+        keys = ["registrant_progres_id", "partner_code", "assistance_type", "distribution_cycle"]
         parts = [str(v).strip() for v in (extra or []) if str(v).strip()]
         parts += [str(payload.get(k) or "").strip() for k in keys if str(payload.get(k) or "").strip()]
         return " ".join(parts).strip() or str(payload.get("functional_record_id") or "").strip()
