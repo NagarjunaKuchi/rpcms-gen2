@@ -1,7 +1,26 @@
 # rpcms-gen2
 
-Refugee Partnership Coordination & Monitoring System (RPCMS) on OpenG2P **Gen2**.
-Dev environment only. Work in progress: see docs/PLAN.md.
+Refugee Partnership Coordination & Monitoring System (RPCMS) on OpenG2P **Gen2** (registry-platform).
+**Dev environment only** (fixed passwords, no TLS). Work in progress: see `docs/PLAN.md`.
 
-- `refugee-extension/` registry-platform extension (individual, household, partner assistance events), derived from the platform reference extension (MPL-2.0).
-- `docker/`, `scripts/`, `test/`: to be added (one-script deploy for Ubuntu 22.04).
+## Deploy locally (Ubuntu 22.04)
+```
+git clone <this repo> && cd rpcms-gen2
+./deploy.sh        # installs Docker if missing (then log out/in and re-run), builds, starts, seeds, smoke-tests
+./stop.sh          # stop, keep data
+./reset.sh         # wipe everything
+```
+Needs roughly 8 GB RAM free and several GB of disk; first run builds images. Ports used: 3000, 15432, 18080-18083, 18090-18091.
+On a remote VM, tunnel the UI/Keycloak/API ports over SSH (the UI is hard-wired to `localhost`; see the end of `deploy.sh` output).
+
+## Layout
+- `refugee-extension/`  registry-platform extension (Individual, Household, **AssistanceEvent** register), derived from the platform reference extension (MPL-2.0).
+- `docker/`  thin images on the published `openg2p/openg2p-registry-*` base (`RP_VERSION` in `deploy/.env`), with documented workarounds for upstream image defects.
+- `deploy/`  compose stack (adapted from registry-platform's functional-testing gate), Keycloak realm, IAM seed.
+- `scripts/`  `bootstrap-ubuntu.sh`, `seed-iam.sh`, `probe_api.py`, `test_assistance.py`.
+
+## Status
+Working on the dev stack (verified by hand): stack boots; extension migrates; assistance events can be added by change request;
+the duplicate-assistance rule (same ProGres ID + assistance type + cycle) is enforced at approval.
+Not built yet: external-system mocks (ProGres, UGPass, URSB, NGO Bureau, AMP, NIMES), the demo-screen runner, offline handover ingest,
+UI labels/translations, ID renewal, self-reliance survey, national dashboard. Not verified: login to the staff UI with `admin`/`admin`.
