@@ -29,7 +29,7 @@ class G2PHouseholdHousingAndServices:
     cooking_fuel_type: Mapped[CookingFuelEnum] = mapped_column(String, nullable=True)
 
 class G2PRegisterHouseholdHousingAndServices(G2PRegister, G2PHouseholdHousingAndServices):
-    __tablename__ = "g2p_register_household_housing_and_services"
+    __tablename__ = "g2p_register_household_housing"
 
     def get_search_text_fields(self) -> str:
         """Return household housing and services fields used to build search_text."""
@@ -46,12 +46,12 @@ class G2PRegisterHouseholdHousingAndServices(G2PRegister, G2PHouseholdHousingAnd
 class G2PRegisterHistoryHouseholdHousingAndServices(
     G2PRegisterHistory, G2PHouseholdHousingAndServices
 ):
-    __tablename__ = "g2p_register_history_household_housing_and_services"
+    __tablename__ = "g2p_register_history_household_housing"
 
 class G2PIntakeFormHouseholdHousingAndServices(
     G2PIntakeForm, G2PRegister, G2PHouseholdHousingAndServices
 ):
-    __tablename__ = "g2p_intake_form_household_housing_and_services"
+    __tablename__ = "g2p_intake_form_household_housing"
 
     def get_search_text_fields(self) -> str:
         """Return household housing and services fields used to build search_text."""
