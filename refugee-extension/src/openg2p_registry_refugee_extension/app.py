@@ -201,6 +201,12 @@ class Initializer(BaseInitializer):
                 RpcmsReportController().post_init()
             except Exception:
                 _logger.exception("Could not register the /rpcms-reports endpoints")
+            try:
+                from .handover.controller import RpcmsHandoverController
+
+                RpcmsHandoverController().post_init()
+            except Exception:
+                _logger.exception("Could not register the /rpcms-handovers endpoints")
 
     def migrate_database(self, args):
 

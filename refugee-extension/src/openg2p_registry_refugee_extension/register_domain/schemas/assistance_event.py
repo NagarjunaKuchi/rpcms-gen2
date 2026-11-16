@@ -24,6 +24,12 @@ class G2PSchemaAssistanceEvent:
     capture_channel: Optional[str] = None
     offline_batch_id: Optional[str] = None
     progres_authenticated: Optional[bool] = None
+    client_record_id: Optional[str] = None
+    captured_at: Optional[str] = None
+    officer: Optional[str] = None
+    gps_latitude: Optional[float] = None
+    gps_longitude: Optional[float] = None
+    gps_accuracy_m: Optional[float] = None
 
 
 class G2PRegisterSchemaAssistanceEvent(G2PRegisterBaseSchema, G2PSchemaAssistanceEvent):

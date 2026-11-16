@@ -8,6 +8,7 @@ from openg2p_registry_core.services import G2PRegisterDomainService
 from ...integrations import Outcome, get_integrations
 from ...rules.assistance_duplicates import DEDUP_KEYS, first_duplicate_within, key_of
 from ...rules.assistance_duplicates import message as duplicate_message
+from ...rules.service_point_overlap import valid_coordinates
 from .utils.validations import as_float, parse_date, validation_error
 
 _logger = logging.getLogger("g2p-register-assistanceevent-service")
@@ -32,6 +33,10 @@ class G2PRegisterDomainServiceAssistanceEvent(G2PRegisterDomainService):
                         validation_error(f"{key} must be a non-negative number")
             if record.get("delivery_date") not in (None, "") and parse_date(record.get("delivery_date")) is None:
                 validation_error("delivery_date is not a valid date")
+            lat, lon = record.get("gps_latitude"), record.get("gps_longitude")
+            if lat not in (None, "") or lon not in (None, ""):
+                if not valid_coordinates(lat, lon):
+                    validation_error("gps_latitude and gps_longitude must both be given and be real coordinates")
             channel = record.get("capture_channel")
             if channel not in (None, "") and str(channel).upper() not in CAPTURE_CHANNELS:
                 validation_error(f"capture_channel must be one of {sorted(CAPTURE_CHANNELS)}")

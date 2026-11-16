@@ -29,6 +29,9 @@ Sent only when a person calls `POST /rpcms-reports/submit`; nothing is scheduled
 The NIMES indicators also carry `RPCMS-HOUSEHOLDS-SURVEYED` and `RPCMS-HOUSEHOLDS-WITH-INCOME`: each household counts once, by its latest self-reliance survey dated in the quarter; left out when nothing was surveyed. They are RPCMS working codes, not NDP IV codes.
 Every attempt (SENT, FAILED, NOT_CONFIGURED) is logged in `rpcms_report_submission`.
 
+## Field handover sync (staff API)
+`POST /rpcms-handovers/sync` `{"batch_id", "records": [{"client_record_id", "registrant_progres_id", "partner_code", "assistance_type", "distribution_cycle", "delivery_date", optional "amount", "currency", "quantity", "unit", "project_ref", "delivery_location", "officer", "captured_at" (ISO-8601 with zone), "gps_latitude", "gps_longitude", "gps_accuracy_m"}]}` -> `{"batch_id", "received", "counts", "results": [{"client_record_id", "status", "reason", "record_id"}]}`. This contract is ours, not a UNHCR/OPM specification. Authentication is the staff API's usual sign-in; there is no link between a login and a partner yet, so any user with `rpcmsHandover:sync` can send for any active partner.
+
 ## Behaviour when a system is not available
 Nothing is invented and nothing blocks the record:
 - Partner: status fields become `NOT_CHECKED` and overall compliance `NOT_CHECKED` (a definite "not found" is `NON_COMPLIANT`).

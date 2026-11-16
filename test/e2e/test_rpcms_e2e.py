@@ -478,6 +478,70 @@ def test_self_reliance_survey_is_scored_and_feeds_the_reports(staff, cfg):
     assert status == 200 and codes["RPCMS-HOUSEHOLDS-SURVEYED"] >= 1 and codes["RPCMS-HOUSEHOLDS-WITH-INCOME"] >= 1
 
 
+# ---------------------------------------------------------------- Field handover sync ---------------------
+
+def sync_call(staff, batch_id, records):
+    staff._refresh_auth_header()
+    r = staff._client.post("/rpcms-handovers/sync", json={"batch_id": batch_id, "records": records})
+    try:
+        return r.status_code, r.json()
+    except ValueError:
+        return r.status_code, {"raw": r.text}
+
+
+def test_field_handovers_sync_once_with_gps_and_the_same_rules(staff, cfg):
+    code = register_partner(staff, cfg, "Nile Hope Uganda", "80020003318742", "NGO/PMT/2025/4418")
+    partner_record(staff, code)
+    parent = person(staff, cfg, None)
+    pid = "UGA-" + str(uuid.uuid4().int)[:8]
+    assert change(staff, cfg, parent, "individual_info_tab", "in_identifier", REGISTER_INDIVIDUAL, dict(progres_id=pid),
+                  "UPDATE", pid) == "APPROVED"
+    cycle = "C-" + uuid.uuid4().hex[:6]
+    base = dict(registrant_progres_id=pid, partner_code=code, assistance_type="CASH_FOR_FOOD", distribution_cycle=cycle,
+                delivery_date=date.today().isoformat(), amount=150000, currency="UGX", delivery_location="Zone 3, Point A",
+                officer="Emmanuel Taban", captured_at=date.today().isoformat() + "T08:42:00+00:00",
+                gps_latitude=3.4719, gps_longitude=31.3547, gps_accuracy_m=8)
+    good = dict(base, client_record_id="PH-" + uuid.uuid4().hex[:8])
+    batch = "B-" + uuid.uuid4().hex[:6]
+
+    # The person's ProGres ID is applied by the worker after approval, so wait until the registry knows it.
+    def registered():
+        status, body = sync_call(staff, batch, [good])
+        assert status == 200, body
+        only = body["results"][0]
+        return body if "not registered" not in only.get("reason", "") else None
+
+    first = wait_for(registered, what="registrant known by ProGres ID")
+    assert first["results"][0]["status"] in ("SYNCED", "ALREADY_SYNCED"), first
+
+    bad = [
+        dict(base, client_record_id="PH-" + uuid.uuid4().hex[:8], registrant_progres_id="UGA-NOBODY-" + uuid.uuid4().hex[:5]),
+        dict(base, client_record_id="PH-" + uuid.uuid4().hex[:8], distribution_cycle="C-X", gps_longitude=None),
+        dict(base, client_record_id="PH-" + uuid.uuid4().hex[:8], distribution_cycle="C-Y", partner_code="NO-SUCH-PARTNER"),
+        dict(base, client_record_id="PH-" + uuid.uuid4().hex[:8]),  # same person, type and cycle as `good`
+    ]
+    status, body = sync_call(staff, batch, [good] + bad)
+    assert status == 200, body
+    by = {r["client_record_id"]: r for r in body["results"]}
+    assert by[good["client_record_id"]]["status"] == "ALREADY_SYNCED"  # sending again is safe
+    assert "not registered" in by[bad[0]["client_record_id"]]["reason"] and by[bad[0]["client_record_id"]]["status"] == "REJECTED"
+    assert "coordinates" in by[bad[1]["client_record_id"]]["reason"]
+    assert "not an active partner" in by[bad[2]["client_record_id"]]["reason"]
+    assert by[bad[3]["client_record_id"]]["status"] == "DUPLICATE" and "Duplicate assistance" in by[bad[3]["client_record_id"]]["reason"]
+
+    # Exactly one event exists, carrying the GPS position, the channel and the batch, with no human approval needed.
+    events = rows(staff, parent, "individual_assistance_tab", AE)
+    assert len(events) == 1, events
+    e = events[0]
+    assert e["capture_channel"] == "OFFLINE_HANDOVER" and e["offline_batch_id"] == batch and e["client_record_id"] == good["client_record_id"]
+    assert float(e["gps_latitude"]) == 3.4719 and float(e["gps_longitude"]) == 31.3547 and e["officer"] == "Emmanuel Taban"
+    assert e["progres_authenticated"] is False  # set by the registry from ProGres, never taken from the phone
+
+    # The envelope itself is checked.
+    assert sync_call(staff, "", [good])[0] == 400
+    assert sync_call(staff, batch, [])[0] == 400
+
+
 def test_dashboard_charts_show_the_registered_data():
     """The Superset dashboard, signed in as its admin, returns real rows from the reporting views."""
     import httpx
