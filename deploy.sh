@@ -74,10 +74,14 @@ cat <<EOF
 
 RPCMS (dev) is up.
   Staff UI        http://localhost:3000        login: admin / admin   (Keycloak realm 'staff')
-  Keycloak        http://localhost:18080       admin console: admin / admin
+  Keycloak        http://localhost:18080 (on the VM)  admin console: admin / admin
   Staff API       http://localhost:18082/docs
   Partner API     http://localhost:18083/docs
-Running on a remote VM? Tunnel from your PC (the UI is hard-wired to localhost URLs):
-  ssh -L 3000:localhost:3000 -L 18080:localhost:18080 -L 18082:localhost:18082 <user>@<vm>
+To use the UI from your PC's browser (dev setup; the stack's Keycloak hostname is fixed to 'keycloak:8080'):
+  1. Add this line to your PC's hosts file (Windows: C:\\Windows\\System32\\drivers\\etc\\hosts, as Administrator):
+         127.0.0.1  keycloak
+  2. Open an SSH tunnel to the VM (note local 8080 -> Keycloak):
+         ssh -L 3000:localhost:3000 -L 8080:localhost:18080 -L 18081:localhost:18081 -L 18082:localhost:18082 <user>@<vm>
+  3. Browse http://localhost:3000   (the sign-in page will be at http://keycloak:8080)
 Stop: ./stop.sh     Wipe all data: ./reset.sh
 EOF

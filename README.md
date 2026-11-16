@@ -11,7 +11,7 @@ git clone <this repo> && cd rpcms-gen2
 ./reset.sh         # wipe everything
 ```
 Needs roughly 8 GB RAM free and several GB of disk; first run builds images. Ports used: 3000, 15432, 18080-18083, 18090-18091.
-On a remote VM, tunnel the UI/Keycloak/API ports over SSH (the UI is hard-wired to `localhost`; see the end of `deploy.sh` output).
+Browser access from another machine needs a hosts entry (`127.0.0.1 keycloak`) plus an SSH tunnel, because Keycloak's hostname is fixed to `keycloak:8080` so that token issuers match across services. Exact steps are printed at the end of `deploy.sh`.
 
 ## Layout
 - `refugee-extension/`  registry-platform extension (Individual, Household, **AssistanceEvent** register), derived from the platform reference extension (MPL-2.0).
