@@ -18,7 +18,7 @@ fi
 if ! docker info >/dev/null 2>&1; then
   echo "Cannot talk to Docker. If you were just added to the 'docker' group, log out and back in. Do not use sudo." >&2; exit 1
 fi
-for p in 3000 15432 18080 18081 18082 18083 18090 18091 18100; do
+for p in 3000 15432 18080 18081 18082 18083 18088 18090 18091 18100; do
   if ss -ltn 2>/dev/null | awk '{print $4}' | grep -q ":${p}\$"; then
     # ignore if it is our own stack
     if ! docker ps --format '{{.Names}} {{.Ports}}' | grep -q "deploy-.*:${p}->"; then
@@ -59,6 +59,14 @@ mcode="$(docker inspect -f '{{.State.ExitCode}}' "$mid")"
 log "Seeding IAM login provider and roles"
 bash scripts/seed-iam.sh
 
+log "Waiting for the dashboard (Superset) to be built"
+bid="$(cd deploy && docker compose ps -a -q superset-bootstrap)"
+for i in $(seq 1 120); do
+  bs="$(docker inspect -f '{{.State.Status}}' "$bid")"; [ "$bs" = exited ] && break; sleep 5
+done
+bcode="$(docker inspect -f '{{.State.ExitCode}}' "$bid")"
+[ "$bs" = exited ] && [ "$bcode" = 0 ] || { echo "superset-bootstrap did not finish cleanly (status=$bs exit=$bcode); see: cd deploy && docker compose logs superset-bootstrap superset --tail 60" >&2; exit 1; }
+
 log "Making sure workers are up"
 ( cd deploy && docker compose up -d celery-worker celery-beat )
 sleep 5
@@ -78,11 +86,12 @@ RPCMS (dev) is up.
   Keycloak        http://localhost:18080 (on the VM)  admin console: admin / admin
   Staff API       http://localhost:18082/docs
   Partner API     http://localhost:18083/docs
+  Dashboard       http://localhost:18088/superset/dashboard/rpcms-national/   login: admin / admin
 To use the UI from your PC's browser (dev setup; the stack's Keycloak hostname is fixed to 'keycloak:8080'):
   1. Add this line to your PC's hosts file (Windows: C:\\Windows\\System32\\drivers\\etc\\hosts, as Administrator):
          127.0.0.1  keycloak
   2. Open an SSH tunnel to the VM (note local 8080 -> Keycloak):
-         ssh -L 3000:localhost:3000 -L 8080:localhost:18080 -L 18081:localhost:18081 -L 18082:localhost:18082 <user>@<vm>
+         ssh -L 3000:localhost:3000 -L 18088:localhost:18088 -L 8080:localhost:18080 -L 18081:localhost:18081 -L 18082:localhost:18082 <user>@<vm>
   3. Browse http://localhost:3000   (the sign-in page will be at http://keycloak:8080)
 End-to-end tests (against a fresh stack): ./run-e2e.sh
 Stop: ./stop.sh     Wipe all data: ./reset.sh

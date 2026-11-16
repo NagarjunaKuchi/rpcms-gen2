@@ -40,9 +40,9 @@ class G2PRegisterDomainServiceAssistanceEvent(G2PRegisterDomainService):
         from openg2p_fastapi_common.context import get_async_session_maker
 
         async with get_async_session_maker()() as session:
-            await self._check_duplicates(records, session)
+            await self._check_duplicates(records, session, log=True)
 
-    async def _check_duplicates(self, rows: list[dict], session) -> None:
+    async def _check_duplicates(self, rows: list[dict], session, log: bool = False) -> None:
         """Reject a row whose (ProGres ID, assistance type, cycle) is already recorded, or repeated in the request.
 
         registry-core's built-in dedup does not cover child (TABLE) registers, so the rule lives here. A partial
@@ -67,6 +67,8 @@ class G2PRegisterDomainServiceAssistanceEvent(G2PRegisterDomainService):
 
         within = first_duplicate_within([m for m, _, _ in candidates])
         if within:
+            if log:
+                await self._log_duplicate(within, "repeated within one request")
             validation_error("Duplicate assistance in this request: same registrant, assistance type and cycle")
         for _, key, own_id in candidates:
             query = select(Event.internal_record_id).where(
@@ -77,7 +79,24 @@ class G2PRegisterDomainServiceAssistanceEvent(G2PRegisterDomainService):
             if own_id:
                 query = query.where(Event.internal_record_id != own_id)
             if (await session.execute(query.limit(1))).first():
+                if log:
+                    await self._log_duplicate(key, "already recorded")
                 validation_error(duplicate_message(key))
+
+    async def _log_duplicate(self, key: tuple, reason: str) -> None:
+        """Keep a record of a refused duplicate (the dashboard counts them). Own session and commit, because the
+        caller's request is about to be rejected. A failure here must never change the rejection itself."""
+        try:
+            from openg2p_fastapi_common.context import get_async_session_maker
+
+            from ..models import RpcmsDuplicateAttempt
+
+            async with get_async_session_maker()() as log_session:
+                log_session.add(RpcmsDuplicateAttempt(registrant_progres_id=key[0], assistance_type=key[1],
+                                                      distribution_cycle=key[2], reason=reason))
+                await log_session.commit()
+        except Exception:
+            _logger.exception("Could not record the refused duplicate")
 
     async def pre_approve(self, change_request, session):
         # Imported lazily: models import this service module.

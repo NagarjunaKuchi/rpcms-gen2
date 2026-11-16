@@ -89,7 +89,9 @@ INSERT INTO staff_portal_applications
       (156, 100, 'outgestTemplate:edit',           'outgestTemplate:edit',           true, NOW(), NOW()),
       (157, 100, 'outgestTemplate:delete',         'outgestTemplate:delete',         true, NOW(), NOW()),
       (158, 100, 'outgoingMessage:view',           'outgoingMessage:view',           true, NOW(), NOW()),
-      (159, 100, 'incomingMessage:view',           'incomingMessage:view',           true, NOW(), NOW())
+      (159, 100, 'incomingMessage:view',           'incomingMessage:view',           true, NOW(), NOW()),
+      (200, 100, 'rpcmsReport:view',               'rpcmsReport:view',               true, NOW(), NOW()),
+      (201, 100, 'rpcmsReport:submit',             'rpcmsReport:submit',             true, NOW(), NOW())
     ON CONFLICT (id) DO NOTHING;
 
     INSERT INTO staff_roles (id, application_id, role_mnemonic, role_description, active, created_at, updated_at)

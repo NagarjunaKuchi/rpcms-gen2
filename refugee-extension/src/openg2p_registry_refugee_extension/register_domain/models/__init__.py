@@ -109,3 +109,4 @@ from .assistance_event import (
     G2PRegisterHistoryAssistanceEvent,
     G2PIntakeFormAssistanceEvent,
 )
+from .reporting import RpcmsDuplicateAttempt, RpcmsReportSubmission

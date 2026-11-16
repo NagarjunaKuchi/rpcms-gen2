@@ -67,6 +67,8 @@ from .register_domain.models import (
     G2PRegisterIndividualVulnerability,
     G2PRegisterHistoryIndividualVulnerability,
     G2PIntakeFormIndividualVulnerability,
+    RpcmsDuplicateAttempt,
+    RpcmsReportSubmission,
 )
 from .register_domain.services import (
     G2PRegisterDomainServiceIndividual,
@@ -131,6 +133,8 @@ MODELS = [
     G2PRegisterServicePoint,
     G2PRegisterHistoryServicePoint,
     G2PIntakeFormServicePoint,
+    RpcmsDuplicateAttempt,
+    RpcmsReportSubmission,
 ]
 
 
@@ -182,6 +186,16 @@ class Initializer(BaseInitializer):
         G2PRegisterDomainServiceIndividual()
         G2PRegisterDomainServiceHousehold()
 
+        if _config.reporting_api_enabled:
+            # Only the staff API sets this. It needs iam_core and a running app, so a failure is logged loudly
+            # rather than stopping the service: the registers still work without the report endpoints.
+            try:
+                from .reporting.controller import RpcmsReportController
+
+                RpcmsReportController().post_init()
+            except Exception:
+                _logger.exception("Could not register the /rpcms-reports endpoints")
+
     def migrate_database(self, args):
 
         async def migrate():
@@ -189,5 +203,9 @@ class Initializer(BaseInitializer):
             for model in MODELS:
                 await model.create_migrate()
                 await add_missing_columns(model)
+            from .reporting import create_reporting_views
+
+            async with dbengine.get().begin() as conn:
+                await create_reporting_views(conn)
 
         asyncio.run(migrate())

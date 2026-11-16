@@ -55,6 +55,8 @@ class IntegrationConfig:
     sms_sender_id: str = ""
     amp_base_url: str = ""
     amp_api_key: str = ""
+    nimes_base_url: str = ""
+    nimes_api_key: str = ""
     ugpass_base_url: str = ""
     ugpass_api_key: str = ""
 
@@ -74,6 +76,8 @@ class IntegrationConfig:
             sms_sender_id=settings.sms_sender_id,
             amp_base_url=settings.amp_base_url,
             amp_api_key=settings.amp_api_key,
+            nimes_base_url=settings.nimes_base_url,
+            nimes_api_key=settings.nimes_api_key,
             ugpass_base_url=settings.ugpass_base_url,
             ugpass_api_key=settings.ugpass_api_key,
         )
@@ -160,6 +164,17 @@ class Integrations:
         """UGPass. OK data: {"valid": bool, "problems": [str], "current_sha256", "signed_sha256", "signatures": int, "eseals": int}"""
         path = "/ugpass/v1/documents/" + urllib.parse.quote(document_id, safe="") + "/verify"
         return await self._call(self._c.ugpass_base_url, self._c.ugpass_api_key, "GET", path)
+
+    async def submit_expenditure(self, payload: dict) -> Response:
+        """AMP. Body: {"quarter", "items": [{"amp_record", "project_code", "currency", "amount", "events"}]}.
+        OK data: {"accepted": bool, "reference": str}. Not idempotent on the AMP side as far as we know: callers must
+        not resend a quarter that was accepted."""
+        return await self._call(self._c.amp_base_url, self._c.amp_api_key, "POST", "/amp/v1/expenditure", body=payload)
+
+    async def submit_indicators(self, payload: dict) -> Response:
+        """NIMES. Body: {"quarter", "indicators": [{"code", "name", "value", "unit"}]}.
+        OK data: {"accepted": bool, "reference": str}."""
+        return await self._call(self._c.nimes_base_url, self._c.nimes_api_key, "POST", "/nimes/v1/indicators", body=payload)
 
     async def send_sms(self, to: str, text: str, ref: str) -> Response:
         """SMS gateway. OK data: {"id": str}"""

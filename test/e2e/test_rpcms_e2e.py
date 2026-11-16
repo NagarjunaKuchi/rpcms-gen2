@@ -1,7 +1,9 @@
 import json
+import os
 import urllib.parse
 import urllib.request
 import uuid
+from datetime import date
 
 import pytest
 
@@ -322,3 +324,126 @@ def test_service_point_with_half_a_coordinate_is_refused(staff, cfg):
     r = change(staff, cfg, project, "project_service_points_tab", "pj_table_service_points", SP,
                dict(point_name="Bad", service_type="CASH_TRANSFER", latitude=3.4), "ADD", "Bad", register=PROJECT)
     assert "latitude and longitude must be entered together" in r
+
+
+# ---------------------------------------------------------------- Reporting and dashboard -------------------
+
+SUPERSET = os.environ.get("RPCMS_SUPERSET_BASE", "http://127.0.0.1:18088")
+
+
+def today_quarter():
+    d = date.today()
+    return f"{d.year}-Q{(d.month - 1) // 3 + 1}"
+
+
+def report_call(staff, method, path, **kw):
+    """The /rpcms-reports endpoints use plain JSON, not the register envelope. Returns (status, json)."""
+    staff._refresh_auth_header()
+    r = staff._client.request(method, "/rpcms-reports" + path, **kw)
+    try:
+        return r.status_code, r.json()
+    except ValueError:
+        return r.status_code, {"raw": r.text}
+
+
+def reason(body):
+    """The platform wraps errors as {"errors": [{"code", "message"}]}."""
+    return " ".join(e.get("message", "") for e in body.get("errors", [])) or str(body)
+
+
+def add_event(staff, cfg, parent, **over):
+    row = dict(registrant_progres_id=KNOWN_PROGRES_ID, partner_code="NHU", partner_name="Nile Hope Uganda",
+               assistance_type="CASH_FOR_FOOD", distribution_cycle="C-" + uuid.uuid4().hex[:6],
+               delivery_date=date.today().isoformat(), delivery_location="Zone 3", currency="UGX")
+    row.update(over)
+    result = change(staff, cfg, parent, "individual_assistance_tab", "in_table_assistance_events", AE, row, "ADD",
+                    row["registrant_progres_id"])
+    assert result == "APPROVED", result
+    return row
+
+
+def test_refused_duplicates_are_counted(staff, cfg):
+    q = today_quarter()
+    before = report_call(staff, "GET", "/summary", params={"quarter": q})[1]["duplicates_flagged"]
+    parent = person(staff, cfg, "+256700000222")
+    first = add_event(staff, cfg, parent)
+    again = change(staff, cfg, parent, "individual_assistance_tab", "in_table_assistance_events", AE, first, "ADD",
+                   first["registrant_progres_id"])
+    assert "Duplicate assistance" in again
+    after = report_call(staff, "GET", "/summary", params={"quarter": q})[1]["duplicates_flagged"]
+    assert after >= before + 1
+
+
+def test_quarterly_reports_preview_submit_and_do_not_double_count(staff, cfg):
+    q = today_quarter()
+    _, project = register_project(staff, cfg)
+    parent = person(staff, cfg, "+256700000333")
+    add_event(staff, cfg, parent, project_ref=project["project_code"], amount=150000)
+    add_event(staff, cfg, parent, project_ref="NO-SUCH-PROJECT-" + uuid.uuid4().hex[:4], amount=5000)
+
+    # Approval returns before the worker has applied the change, so wait until both events show in the preview.
+    def ready():
+        st, pv = report_call(staff, "GET", "/preview", params={"system": "AMP", "quarter": q})
+        assert st == 200, pv
+        has_project = any(i["project_code"] == project["project_code"] for i in pv["payload"]["items"])
+        return pv if has_project and pv["not_sent"] else None
+
+    preview = wait_for(ready, what="both events in the AMP preview")
+    status = 200
+    mine = [i for i in preview["payload"]["items"] if i["project_code"] == project["project_code"]]
+    assert mine and mine[0]["amp_record"] == AMP_RECORD and mine[0]["amount"] >= 150000 and mine[0]["currency"] == "UGX"
+    # An event for a project RPCMS does not know cannot be matched to an AMP record, so it is listed, not sent.
+    assert any(u["reason"] == "no AMP record number" for u in preview["not_sent"])
+    assert all(i["amp_record"] for i in preview["payload"]["items"])
+
+    # forced, so the test also passes on a stack where an earlier run already sent this quarter
+    status, sent = report_call(staff, "POST", "/submit", json={"system": "AMP", "quarter": q, "force": True})
+    assert status == 200 and sent["status"] == "SENT" and sent["reference"].startswith("AMP-EXP-"), sent
+    status, again = report_call(staff, "POST", "/submit", json={"system": "AMP", "quarter": q})
+    assert status == 409 and "already accepted" in reason(again)
+    status, forced = report_call(staff, "POST", "/submit", json={"system": "AMP", "quarter": q, "force": True})
+    assert status == 200 and forced["status"] == "SENT"
+
+    status, preview = report_call(staff, "GET", "/preview", params={"system": "NIMES", "quarter": q})
+    codes = {i["code"]: i["value"] for i in preview["payload"]["indicators"]}
+    assert codes["RPCMS-PERSONS-REACHED"] >= 1 and codes["RPCMS-EVENTS-AUTHENTICATED"] >= 1
+    status, nimes = report_call(staff, "POST", "/submit", json={"system": "NIMES", "quarter": q, "force": True})
+    assert status == 200 and nimes["status"] == "SENT" and nimes["reference"].startswith("NIMES-"), nimes
+
+    status, history = report_call(staff, "GET", "/submissions")
+    assert {(h["system"], h["status"]) for h in history} >= {("AMP", "SENT"), ("NIMES", "SENT")}
+
+
+def test_report_requests_are_validated(staff, cfg):
+    assert report_call(staff, "GET", "/summary", params={"quarter": "2026-Q9"})[0] == 400
+    assert report_call(staff, "GET", "/preview", params={"system": "SAP", "quarter": today_quarter()})[0] == 400
+    assert report_call(staff, "POST", "/submit", json={"system": "AMP", "quarter": "next-quarter"})[0] == 400
+    # A quarter with no events has nothing to send, and says so rather than sending an empty report.
+    status, body = report_call(staff, "POST", "/submit", json={"system": "AMP", "quarter": "2001-Q1"})
+    assert status == 409 and "Nothing to send" in reason(body)
+
+
+def test_dashboard_charts_show_the_registered_data():
+    """The Superset dashboard, signed in as its admin, returns real rows from the reporting views."""
+    import httpx
+
+    with httpx.Client(base_url=SUPERSET, timeout=60) as c:
+        tok = c.post("/api/v1/security/login", json={"username": "admin", "password": "admin", "provider": "db"}).json()["access_token"]
+        h = {"Authorization": "Bearer " + tok}
+
+        def chart_rows(name):
+            q = "(filters:!((col:slice_name,opr:eq,value:'%s')))" % name
+            cid = c.get("/api/v1/chart/", params={"q": q}, headers=h).json()["result"][0]["id"]
+            res = c.get(f"/api/v1/chart/{cid}/data/", headers=h).json()["result"][0]
+            assert not res.get("error"), res
+            return res["data"]
+
+        partners = chart_rows("Partner performance")
+        assert any(r["compliance_status"] == "COMPLIANT" for r in partners)
+        assert chart_rows("Partners compliance-verified")[0]["Partners compliance-verified"] >= 1
+        assert chart_rows("Persons reached with assistance")[0]["Persons reached"] >= 1
+        assert any(r.get("Persons reached") for r in chart_rows("Reach by delivery location"))
+        assert any(r.get("currency") == "UGX" for r in chart_rows("Expenditure by project and quarter"))
+        # The dashboard's database role sees the reporting views and nothing else.
+        dash = c.get("/api/v1/dashboard/rpcms-national", headers=h)
+        assert dash.status_code == 200 and dash.json()["result"]["published"] is True

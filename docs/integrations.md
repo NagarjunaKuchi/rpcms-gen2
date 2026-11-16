@@ -22,6 +22,12 @@ Common: `Authorization: Bearer <key>` when a key is set; timeout `INTEGRATION_TI
 - **MoU** (after each approved add or edit of an MoU row): asks UGPass about the document: `VALID` (unaltered, expected signatures and e-Seals present), `INCOMPLETE`, `INVALID` (e.g. content changed after signing), `NOT_FOUND` or `NOT_CHECKED`. Expected counts default to 3 signatures and 2 e-Seals (`MOU_EXPECTED_SIGNATURES`, `MOU_EXPECTED_ESEALS`), or can be set per MoU. **Signing itself happens in the signatories' UGPass apps, not in RPCMS.** To re-check a MoU, edit the row (for example its remarks) and approve.
 - **Service points** (after each approved add or edit): compared by distance with other partners' non-closed points of the same service type; within `SERVICE_POINT_OVERLAP_RADIUS_M` (default 500) it is marked `OVERLAP` with the other point's name and distance.
 
+## Quarterly reports (AMP expenditure, NIMES indicators)
+Sent only when a person calls `POST /rpcms-reports/submit`; nothing is scheduled.
+- AMP `POST /amp/v1/expenditure`: `{"quarter": "2026-Q4", "items": [{"amp_record", "project_code", "currency", "amount", "events"}]}` -> `{"accepted": true, "reference"}`. Spend is the sum of assistance event amounts by project and quarter (by delivery date). Projects with no AMP record number are not sent.
+- NIMES `POST /nimes/v1/indicators`: `{"quarter", "indicators": [{"code", "name", "value", "unit"}]}` -> `{"accepted": true, "reference"}`. Configure with `REGISTRY_EXTENSIONS_NIMES_BASE_URL` / `_API_KEY`.
+Every attempt (SENT, FAILED, NOT_CONFIGURED) is logged in `rpcms_report_submission`.
+
 ## Behaviour when a system is not available
 Nothing is invented and nothing blocks the record:
 - Partner: status fields become `NOT_CHECKED` and overall compliance `NOT_CHECKED` (a definite "not found" is `NON_COMPLIANT`).

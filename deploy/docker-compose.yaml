@@ -239,6 +239,55 @@ services:
       master-data-api:
         condition: service_healthy
 
+  # National dashboard (demo screen 9). Superset reads the rpcms_rpt_* views through a read-only role.
+  # DEV ONLY: fixed admin/admin and secret key, no SSO, no TLS.
+  superset:
+    image: apache/superset:4.0.1@sha256:ab9467fd712cbe3738d1a7d574d6230c0b04a88af5e5e11f3fbc38e2af305162
+    user: root
+    environment:
+      SUPERSET_CONFIG_PATH: /app/pythonpath/superset_config.py
+      SUPERSET_SECRET_KEY: dev-only-superset-secret-key-change-me-0123456789abcdef
+      SUPERSET_DB_PASSWORD: *pg-password
+      SUPERSET_ADMIN_PASSWORD: admin
+    volumes:
+      - ./superset/superset_config.py:/app/pythonpath/superset_config.py:ro
+    command:
+      - sh
+      - -c
+      - |
+        superset db upgrade || exit 1
+        superset fab create-admin --username admin --password "$$SUPERSET_ADMIN_PASSWORD" --firstname Admin --lastname User --email admin@example.org || true
+        superset init || exit 1
+        exec gunicorn --bind 0.0.0.0:8088 --workers 2 --timeout 120 "superset.app:create_app()"
+    ports:
+      - "18088:8088"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8088/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 60s
+
+  # One-shot: connects Superset to the reporting views and creates the dashboard. Safe to run again.
+  superset-bootstrap:
+    image: apache/superset:4.0.1@sha256:ab9467fd712cbe3738d1a7d574d6230c0b04a88af5e5e11f3fbc38e2af305162
+    restart: "no"
+    environment:
+      SUPERSET_URL: http://superset:8088
+      SUPERSET_ADMIN_PASSWORD: admin
+      REPORTING_DB_PASSWORD: *pg-password
+    volumes:
+      - ./superset/bootstrap.py:/bootstrap/bootstrap.py:ro
+    command: ["python", "/bootstrap/bootstrap.py"]
+    depends_on:
+      superset:
+        condition: service_healthy
+      staff-api:
+        condition: service_healthy
+
   awe:
     image: openg2p/openg2p-awe:1.2.2
     environment:
@@ -448,6 +497,9 @@ services:
       REGISTRY_EXTENSIONS_SMS_BASE_URL: http://mocks:8000
       REGISTRY_EXTENSIONS_AMP_BASE_URL: http://mocks:8000
       REGISTRY_EXTENSIONS_UGPASS_BASE_URL: http://mocks:8000
+      REGISTRY_EXTENSIONS_NIMES_BASE_URL: http://mocks:8000
+      # Report endpoints (/rpcms-reports) live on the staff API only.
+      REGISTRY_EXTENSIONS_REPORTING_API_ENABLED: "true"
     ports:
       - "18082:8000"
     depends_on:
@@ -579,6 +631,7 @@ services:
       REGISTRY_EXTENSIONS_SMS_BASE_URL: http://mocks:8000
       REGISTRY_EXTENSIONS_AMP_BASE_URL: http://mocks:8000
       REGISTRY_EXTENSIONS_UGPASS_BASE_URL: http://mocks:8000
+      REGISTRY_EXTENSIONS_NIMES_BASE_URL: http://mocks:8000
       REGISTRY_CELERY_WORKERS_PARTNER_MGMT_API_URL: http://pm-partner-api:8000
       REGISTRY_CELERY_WORKERS_PARTNER_MGMT_ADMIN_API_URL: http://pm-staff-api:8000
       REGISTRY_CELERY_WORKERS_PARTNER_MGMT_ADMIN_TOKEN_URL: http://keycloak:8080/realms/staff/protocol/openid-connect/token

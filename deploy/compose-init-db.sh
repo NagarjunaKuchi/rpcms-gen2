@@ -29,6 +29,16 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
     \c registry
     CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
+    -- Dashboard (Superset): its own metadata database, and a read-only role that is later granted the
+    -- rpcms_rpt_* views only (see reporting/views.py). It can read no register table.
+    \c postgres
+    CREATE USER superset_user WITH PASSWORD '$POSTGRES_PASSWORD';
+    CREATE DATABASE superset OWNER superset_user;
+    CREATE USER rpcms_reporting WITH PASSWORD '$POSTGRES_PASSWORD';
+    GRANT CONNECT ON DATABASE registry TO rpcms_reporting;
+    \c registry
+    GRANT USAGE ON SCHEMA public TO rpcms_reporting;
+
     -- ID Generator
     \c postgres
     CREATE USER registry_idgenerator_user WITH PASSWORD '$POSTGRES_PASSWORD';

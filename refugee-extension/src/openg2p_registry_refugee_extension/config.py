@@ -36,11 +36,17 @@ class Settings(CoreSettings):
     progres_api_key: str = ""
     amp_base_url: str = ""  # MoFPED Aid Management Platform: funding record lookup
     amp_api_key: str = ""
+    nimes_base_url: str = ""  # NIMES: quarterly indicator submission
+    nimes_api_key: str = ""
     ugpass_base_url: str = ""  # UGPass / NITA-U: electronic signature verification of MoUs
     ugpass_api_key: str = ""
     sms_base_url: str = ""  # SMS gateway
     sms_api_key: str = ""
     sms_sender_id: str = ""
+
+    # Expose the /rpcms-reports endpoints (preview and submit quarterly reports to AMP and NIMES). Enable on the staff
+    # API only: the partner-facing API must not carry them.
+    reporting_api_enabled: bool = False
 
     # --- business rules ----------------------------------------------------------------------------------
     permit_renewal_alert_days: int = 60  # alert this many days before an NGO permit expires
