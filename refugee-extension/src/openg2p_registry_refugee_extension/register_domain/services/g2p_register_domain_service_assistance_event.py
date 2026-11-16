@@ -1,9 +1,11 @@
 import logging
 
 from sqlalchemy import select
+from sqlalchemy.orm.attributes import flag_modified
 
 from openg2p_registry_core.services import G2PRegisterDomainService
 
+from .utils.mocks_client import call_mock
 from .utils.validations import as_float, parse_date, validation_error
 
 _logger = logging.getLogger("g2p-register-assistanceevent-service")
@@ -72,6 +74,26 @@ class G2PRegisterDomainServiceAssistanceEvent(G2PRegisterDomainService):
                 validation_error(
                     f"Duplicate assistance: registrant {key[0]} already received {key[1]} in cycle {key[2]}"
                 )
+
+        # Authentication-only check against UNHCR ProGres v4 (a MOCK in dev): record Yes/No on the row.
+        # No personal data comes back and a "No" does not block recording (staff may enter late/offline data).
+        rows = list((payload.change_payload if payload else None) or [])
+        changed = False
+        for row in rows:
+            pid = str(row.get("registrant_progres_id") or "").strip()
+            if row.get("edit_action") not in (None, "ADD", "UPDATE") or not pid:
+                continue
+            result = await call_mock(
+                "POST",
+                "/progres/v4/authenticate",
+                {"progres_id": pid, "biometric": {"modality": "FACE", "capture": "recorded-by-staff"}},
+            )
+            if result is not None and result[0] == 200:
+                row["progres_authenticated"] = bool(result[1].get("authenticated"))
+                changed = True
+        if changed:
+            payload.change_payload = rows
+            flag_modified(payload, "change_payload")
 
     def construct_search_text(self, payload: dict, extra: list[str] = None) -> str:
         keys = ["registrant_progres_id", "partner_code", "partner_name", "assistance_type", "distribution_cycle", "project_ref"]

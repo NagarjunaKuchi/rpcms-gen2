@@ -28,6 +28,9 @@ from .register_domain.models import (
     G2PRegisterIdRenewalRequest,
     G2PRegisterHistoryIdRenewalRequest,
     G2PIntakeFormIdRenewalRequest,
+    G2PRegisterPartner,
+    G2PRegisterHistoryPartner,
+    G2PIntakeFormPartner,
     G2PRegisterHouseholdProgram,
     G2PRegisterHistoryHouseholdProgram,
     G2PIntakeFormHouseholdProgram,
@@ -97,6 +100,10 @@ class Initializer(BaseInitializer):
             await G2PRegisterIdRenewalRequest.create_migrate()
             await G2PRegisterHistoryIdRenewalRequest.create_migrate()
             await G2PIntakeFormIdRenewalRequest.create_migrate()
+
+            await G2PRegisterPartner.create_migrate()
+            await G2PRegisterHistoryPartner.create_migrate()
+            await G2PIntakeFormPartner.create_migrate()
 
             await G2PRegisterHouseholdProgram.create_migrate()
             await G2PRegisterHistoryHouseholdProgram.create_migrate()

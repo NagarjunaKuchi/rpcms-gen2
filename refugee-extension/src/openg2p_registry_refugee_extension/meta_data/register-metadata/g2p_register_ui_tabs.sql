@@ -9,4 +9,5 @@ INSERT INTO "public"."g2p_register_ui_tabs" ("tab_id","register_id","tab_label",
 ('individual_programs_tab','a0000000-0000-4000-8000-000000000001','individual_programs_tab',9,'TRUE'),
 ('7bf586e3-ba57-45d0-9093-1747f038da16','a0000000-0000-4000-8000-000000000001','individual_household_tab',2,'TRUE'),
 ('individual_assistance_tab','a0000000-0000-4000-8000-000000000001','individual_assistance_tab',10,'TRUE'),
-('individual_id_renewal_tab','a0000000-0000-4000-8000-000000000001','individual_id_renewal_tab',11,'TRUE');
+('individual_id_renewal_tab','a0000000-0000-4000-8000-000000000001','individual_id_renewal_tab',11,'TRUE'),
+('partner_info_tab','a0000000-0000-4000-8000-000000000003','partner_info_tab',1,'TRUE');

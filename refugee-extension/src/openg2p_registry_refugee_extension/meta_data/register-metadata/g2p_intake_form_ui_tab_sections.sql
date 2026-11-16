@@ -20,4 +20,5 @@ INSERT INTO "public"."g2p_intake_form_ui_tab_sections" ("tab_section_id","tab_id
 ('c8e45540-6704-4848-96bc-b50ce008b0d4','form_tab_individual_intake','in_demographic_details',3),
 ('99a993b3-9460-449e-9da8-031c09ee5586','form_tab_individual_intake','in_contact_details',4),
 ('d84ee82c-9129-4c2a-b719-7ee3675ca8a1','form_tab_individual_intake','in_table_assistance_events',14),
-('d84ee82c-9129-4c2a-b719-7ee3675ca8a2','form_tab_individual_intake','in_table_id_renewals',15);
+('d84ee82c-9129-4c2a-b719-7ee3675ca8a2','form_tab_individual_intake','in_table_id_renewals',15),
+('e84ee82c-9129-4c2a-b719-7ee3675ca901','form_tab_partner_intake','pt_organisation',1);
