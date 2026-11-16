@@ -396,7 +396,12 @@ services:
         RP_VERSION: ${RP_VERSION:?set RP_VERSION in deploy/.env}
     environment:
       <<: *staff-api-env
-      RPCMS_MOCKS_URL: http://mocks:8000   # dev mocks of ProGres / SMS (see mocks/)
+      # LOCAL ONLY: every external system points at the mocks service. In a real deployment set the real
+      # base URLs and API keys (from secrets) instead; an empty URL means "not configured" (see docs/integrations.md).
+      REGISTRY_EXTENSIONS_URSB_BASE_URL: http://mocks:8000
+      REGISTRY_EXTENSIONS_NGO_BUREAU_BASE_URL: http://mocks:8000
+      REGISTRY_EXTENSIONS_PROGRES_BASE_URL: http://mocks:8000
+      REGISTRY_EXTENSIONS_SMS_BASE_URL: http://mocks:8000
     ports:
       - "18082:8000"
     depends_on:
@@ -510,7 +515,12 @@ services:
       REGISTRY_CELERY_WORKERS_MINIO_READ_SECRET_KEY: *minio-root-password
       REGISTRY_CELERY_WORKERS_FUNCTIONAL_ID_GENERATION_URL: http://id-generator:8000/v1
       REGISTRY_CELERY_WORKERS_ID_GENERATION_ALLOCATION_PATH: "/idgenerator/{id_type}/id"
-      RPCMS_MOCKS_URL: http://mocks:8000   # dev mocks of URSB / NGO Bureau (see mocks/)
+      # LOCAL ONLY: every external system points at the mocks service. In a real deployment set the real
+      # base URLs and API keys (from secrets) instead; an empty URL means "not configured" (see docs/integrations.md).
+      REGISTRY_EXTENSIONS_URSB_BASE_URL: http://mocks:8000
+      REGISTRY_EXTENSIONS_NGO_BUREAU_BASE_URL: http://mocks:8000
+      REGISTRY_EXTENSIONS_PROGRES_BASE_URL: http://mocks:8000
+      REGISTRY_EXTENSIONS_SMS_BASE_URL: http://mocks:8000
       REGISTRY_CELERY_WORKERS_PARTNER_MGMT_API_URL: http://pm-partner-api:8000
       REGISTRY_CELERY_WORKERS_PARTNER_MGMT_ADMIN_API_URL: http://pm-staff-api:8000
       REGISTRY_CELERY_WORKERS_PARTNER_MGMT_ADMIN_TOKEN_URL: http://keycloak:8080/realms/staff/protocol/openid-connect/token

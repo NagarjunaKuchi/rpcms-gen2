@@ -9,7 +9,7 @@ git clone <this repo> && cd rpcms-gen2
 ./deploy.sh        # installs Docker if missing (then log out/in and re-run), builds, starts, seeds, smoke-tests
 ./stop.sh          # stop, keep data
 ./reset.sh         # wipe everything
-./run-demo.sh      # run the demo use case against a FRESH stack (reset + deploy first)
+./run-e2e.sh       # end-to-end tests against a FRESH stack (reset + deploy first)
 ```
 Needs roughly 8 GB RAM free and several GB of disk; first run builds images. Ports used: 3000, 15432, 18080-18083, 18090-18091.
 Browser access from another machine needs a hosts entry (`127.0.0.1 keycloak`) plus an SSH tunnel, because Keycloak's hostname is fixed to `keycloak:8080` so that token issuers match across services. Exact steps are printed at the end of `deploy.sh`.
@@ -18,20 +18,27 @@ Browser access from another machine needs a hosts entry (`127.0.0.1 keycloak`) p
 - `refugee-extension/`  registry-platform extension (Individual, Household, **AssistanceEvent** register), derived from the platform reference extension (MPL-2.0).
 - `docker/`  thin images on the published `openg2p/openg2p-registry-*` base (`RP_VERSION` in `deploy/.env`), with documented workarounds for upstream image defects.
 - `deploy/`  compose stack (adapted from registry-platform's functional-testing gate), Keycloak realm, IAM seed.
-- `mocks/`  stand-ins for external systems (URSB, NGO Bureau, ProGres v4 auth, UGPass, AMP, NIMES); stdlib Python; every response says `"mock": true`.
-- `scripts/`  `bootstrap-ubuntu.sh`, `seed-iam.sh`, `probe_api.py`, `test_assistance.py`, `run_demo.py` (demo runner, PASS/FAIL/NOT IMPLEMENTED per step).
+- `mocks/`  LOCAL-ONLY stand-ins for external systems (URSB, NGO Bureau, ProGres v4, SMS, UGPass, AMP, NIMES); stdlib Python; every response says `"mock": true`. Never used outside local development.
+- `scripts/`  `bootstrap-ubuntu.sh`, `seed-iam.sh`, `prepare-tests.sh`, `probe_api.py`.
+- `refugee-extension/src/.../integrations/`  adapters for URSB, NGO Bureau, ProGres, SMS (configured by environment, see `docs/integrations.md`).
+- `refugee-extension/src/.../rules/`  business rules as pure functions (partner compliance, duplicate assistance, renewal SMS wording).
+- `refugee-extension/tests/`  unit tests (`python -m pytest refugee-extension/tests`). `test/`  version-pin check; `test/e2e/` end-to-end tests (`./run-e2e.sh`). CI: `.github/workflows/checks.yml`.
 
 ## Using it from the UI
-Open http://localhost:3000 and sign in (dev only): `admin`/`admin` to enter data. Changes to existing records and new intake records need two approvals:
+Open http://localhost:3000 and sign in (local development only): `admin`/`admin` to enter data. Changes to existing records and new intake records need two approvals:
 sign in as `alex.carter`/`alex.carter-pass` (stage 1), then `nina.patel`/`nina.patel-pass` (stage 2), and approve from the approvals list.
-- **Partners:** register a partner via intake (organisation name, URSB number, NGO permit number). After final approval the registry calls the URSB and NGO Bureau mocks and records compliance status and a permit renewal alert date.
-- **Individuals:** the ID Renewal tab records expiry flagged / appointment booked / closed; each approved status change sends an SMS through the mock SMS service.
-- **Assistance tab:** add an assistance row; at approval the registry calls the mock ProGres authentication and records the result. Duplicate (ProGres ID, type, cycle) is rejected.
-Mock URSB numbers/permits accepted: see `mocks/server.py`. Everything external is a mock and says so in its response.
+- **Partners:** register a partner via intake (organisation name, URSB number, NGO permit number). After final approval the registry asks URSB and the NGO Bureau and records compliance and a permit renewal alert date (`permit_renewal_alert_days` before expiry, default 60). If a system cannot answer, the result is NOT_CHECKED, never a guess.
+- **Individuals:** the ID Renewal tab records expiry flagged / appointment booked / closed. Each approved status change sends an SMS to the person's phone number (Contact Details) and the request shows the SMS status (SENT, FAILED, NO_PHONE, NOT_CONFIGURED).
+- **Assistance tab:** add an assistance row; the registry asks ProGres to confirm the ProGres ID and records Yes/No (empty when ProGres could not answer). A duplicate (same ProGres ID, assistance type and cycle) is refused as soon as it is entered.
+
+## Configuration and production notes
+- External systems are configured with `REGISTRY_EXTENSIONS_*` variables; see `docs/integrations.md`. **The request/response contracts in that file are ours, written for the local mocks. They must be checked against each real system before go-live.**
+- Locally, `deploy/docker-compose.yaml` points everything at the mocks and uses fixed development passwords. That compose file is **not** a production deployment. A production deployment follows the farmer-registry pattern (Helm wrapper chart on the shared platform chart); it is not built yet.
+- Database columns added to the models are added to existing tables automatically on start. Changes to the register **metadata** SQL (sections, labels, policies) are not applied to an existing install: a reset is needed locally, and `meta_data/zz-upgrades/` SQL (as in farmer-registry) would be needed for a live system.
 
 ## Status
-Verified in an automated run against a fresh stack (`run-demo.sh`, test harness only): Partner intake + compliance check (compliant and non-compliant cases),
-assistance entry with ProGres authentication recorded, ID renewal with SMS, two-stage approvals.
-**Assumptions:** the permit alert date is 60 days before permit expiry (not from the demo); assistance type values are my own list.
-**Not built:** expiry scan/reminder is manual (no scheduled job), map overlap check, offline field app/GPS, real SMS, self-reliance survey (screen 8), national dashboard.
-**Not verified in a real browser:** rendering of the new dropdowns and list columns; whether Save enables on a section with no pending change request.
+Verified here on a fresh local stack: 32 unit tests and 7 end-to-end tests pass (partner compliance for compliant, unknown and missing-number cases; assistance ProGres confirmation, duplicate refusal on add and on update; renewal SMS to the person's phone with recorded status; no-phone case; two-stage approvals).
+**Assumptions:** the permit alert window defaults to 60 days (not specified anywhere); the assistance type list is ours.
+**Not built:** scheduled expiry scan/reminder (flagging is manual), map overlap check, offline field app/GPS, self-reliance survey, national dashboard, data scopes for sharing with other registries, Helm/production deployment, biometric capture for ProGres.
+**Not verified in a real browser:** rendering of the dropdowns and list columns; sign-in as `alex.carter`/`nina.patel` in the UI (approvals were driven through the same API calls).
+**Known gaps:** `request_ref` on renewals is not enforced unique; a change request that fails at approval for another reason stays pending until rejected.

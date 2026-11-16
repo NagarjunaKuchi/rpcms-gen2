@@ -76,6 +76,6 @@ To use the UI from your PC's browser (dev setup; the stack's Keycloak hostname i
   2. Open an SSH tunnel to the VM (note local 8080 -> Keycloak):
          ssh -L 3000:localhost:3000 -L 8080:localhost:18080 -L 18081:localhost:18081 -L 18082:localhost:18082 <user>@<vm>
   3. Browse http://localhost:3000   (the sign-in page will be at http://keycloak:8080)
-Run the demo use case: ./run-demo.sh   (needs a fresh stack)
+End-to-end tests (against a fresh stack): ./run-e2e.sh
 Stop: ./stop.sh     Wipe all data: ./reset.sh
 EOF

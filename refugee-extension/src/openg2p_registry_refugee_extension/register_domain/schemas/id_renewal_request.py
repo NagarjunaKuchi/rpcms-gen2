@@ -20,6 +20,8 @@ class G2PSchemaIdRenewalRequest:
     appointment_location: Optional[str] = None
     closed_on: Optional[date] = None
     closed_by: Optional[str] = None
+    notification_status: Optional[str] = None
+    notified_on: Optional[date] = None
 
 
 class G2PRegisterSchemaIdRenewalRequest(G2PRegisterBaseSchema, G2PSchemaIdRenewalRequest):

@@ -9,9 +9,9 @@ from ..services import G2PRegisterDomainServiceIdRenewalRequest
 
 
 class G2PIdRenewalRequest:
-    """A refugee-ID renewal request tracked by RPCMS (demo screen 7).
+    """A refugee-ID renewal request tracked by RPCMS .
 
-    RPCMS only flags expiry, books the appointment and informs the refugee. The renewal itself happens in
+    RPCMS only flags expiry, books the appointment and informs the refugee by SMS. The renewal itself happens in
     UNHCR ProGres v4 (outside RPCMS); the OPM officer closes the request here.
     """
 
@@ -26,6 +26,8 @@ class G2PIdRenewalRequest:
     appointment_location: Mapped[str] = mapped_column(String, nullable=True)
     closed_on: Mapped[date] = mapped_column(Date, nullable=True)
     closed_by: Mapped[str] = mapped_column(String, nullable=True)
+    notification_status: Mapped[str] = mapped_column(String, nullable=True)  # SENT / FAILED / NO_PHONE / NOT_CONFIGURED
+    notified_on: Mapped[date] = mapped_column(Date, nullable=True)
 
 
 # Short table names: registry-core adds idx_<table>_search_text_trigram (Postgres limit 63 chars).

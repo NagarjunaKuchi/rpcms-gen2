@@ -88,7 +88,7 @@ class H(BaseHTTPRequestHandler):
                 # Authentication ONLY: answer is yes/no + reference. No personal data is ever returned.
                 rec = PROGRES.get(str(b.get("progres_id", "")))
                 bio = b.get("biometric") or {}
-                ok = bool(rec and rec["active"] and bio.get("modality") in ("FACE", "FINGERPRINT") and bio.get("capture"))
+                ok = bool(rec and rec["active"])  # ID-only confirmation (RPCMS does not capture biometrics)
                 return self._send(200, {"authenticated": ok, "record_active": bool(rec and rec["active"]),
                                         "reference": f"PGV4-AUTH-{datetime.now().strftime('%Y%m%d')}-{secrets.token_hex(3).upper()}", "timestamp": now()})
             if p == "/ugpass/v1/documents":

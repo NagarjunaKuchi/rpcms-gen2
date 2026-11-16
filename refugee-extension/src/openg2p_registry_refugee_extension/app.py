@@ -7,6 +7,9 @@ from .config import Settings
 _config = Settings.get_config()
 
 from openg2p_fastapi_common.app import Initializer as BaseInitializer
+from openg2p_fastapi_common.context import dbengine
+from sqlalchemy import text
+from sqlalchemy.dialects import postgresql
 from openg2p_registry_core.app import Initializer as CoreInitializer
 
 from .register_domain.models import (
@@ -64,6 +67,95 @@ from .register_domain.services import (
 _logger = logging.getLogger(_config.logging_default_logger_name)
 
 
+MODELS = [
+    G2PRegisterHousehold,
+    G2PRegisterHistoryHousehold,
+    G2PIntakeFormHousehold,
+    G2PRegisterIndividual,
+    G2PRegisterHistoryIndividual,
+    G2PIntakeFormIndividual,
+    G2PRegisterIndividualDisability,
+    G2PRegisterHistoryIndividualDisability,
+    G2PIntakeFormIndividualDisability,
+    G2PRegisterIndividualProgram,
+    G2PRegisterHistoryIndividualProgram,
+    G2PIntakeFormIndividualProgram,
+    G2PRegisterAssistanceEvent,
+    G2PRegisterHistoryAssistanceEvent,
+    G2PIntakeFormAssistanceEvent,
+    G2PRegisterIdRenewalRequest,
+    G2PRegisterHistoryIdRenewalRequest,
+    G2PIntakeFormIdRenewalRequest,
+    G2PRegisterPartner,
+    G2PRegisterHistoryPartner,
+    G2PIntakeFormPartner,
+    G2PRegisterHouseholdProgram,
+    G2PRegisterHistoryHouseholdProgram,
+    G2PIntakeFormHouseholdProgram,
+    G2PRegisterHouseholdAsset,
+    G2PRegisterHistoryHouseholdAsset,
+    G2PIntakeFormHouseholdAsset,
+    G2PRegisterIndividualShock,
+    G2PRegisterHistoryIndividualShock,
+    G2PIntakeFormIndividualShock,
+    G2PRegisterHouseholdHousingAndServices,
+    G2PRegisterHistoryHouseholdHousingAndServices,
+    G2PIntakeFormHouseholdHousingAndServices,
+    G2PRegisterIndividualLand,
+    G2PRegisterHistoryIndividualLand,
+    G2PIntakeFormIndividualLand,
+    G2PRegisterIndividualLivelihood,
+    G2PRegisterHistoryIndividualLivelihood,
+    G2PIntakeFormIndividualLivelihood,
+    G2PRegisterIndividualLivestock,
+    G2PRegisterHistoryIndividualLivestock,
+    G2PIntakeFormIndividualLivestock,
+    G2PRegisterIndividualVulnerability,
+    G2PRegisterHistoryIndividualVulnerability,
+    G2PIntakeFormIndividualVulnerability,
+]
+
+
+async def add_missing_columns(model) -> list[str]:
+    """Bring an existing table up to its model by adding the columns it lacks; return their names.
+
+    create_migrate() only creates a table that does not exist yet, so a column added to a model later never
+    reaches an install whose table already exists. Columns are added nullable unless they carry a server
+    default, so existing rows stay valid. Nothing is ever dropped or retyped.
+    """
+    table = model.__table__
+    dialect = postgresql.dialect()
+    async with dbengine.get().begin() as conn:
+        existing = set(
+            (
+                await conn.execute(
+                    text(
+                        "SELECT column_name FROM information_schema.columns "
+                        "WHERE table_schema = current_schema() AND table_name = :name"
+                    ),
+                    {"name": table.name},
+                )
+            ).scalars()
+        )
+        if not existing:
+            return []
+        added = []
+        for column in table.columns:
+            if column.name in existing:
+                continue
+            ddl = f'ALTER TABLE "{table.name}" ADD COLUMN IF NOT EXISTS "{column.name}" ' + column.type.compile(dialect=dialect)
+            default = column.server_default
+            if default is not None:
+                ddl += f" DEFAULT {getattr(default.arg, 'text', default.arg)}"
+                if not column.nullable:
+                    ddl += " NOT NULL"
+            await conn.execute(text(ddl))
+            added.append(column.name)
+    if added:
+        _logger.info("Added columns to %s: %s", table.name, added)
+    return added
+
+
 class Initializer(BaseInitializer):
     def initialize(self, **kwargs):
         super().initialize()
@@ -76,65 +168,8 @@ class Initializer(BaseInitializer):
 
         async def migrate():
             _logger.info("Migrating extensions database")
-
-            await G2PRegisterHousehold.create_migrate()
-            await G2PRegisterHistoryHousehold.create_migrate()
-            await G2PIntakeFormHousehold.create_migrate()
-
-            await G2PRegisterIndividual.create_migrate()
-            await G2PRegisterHistoryIndividual.create_migrate()
-            await G2PIntakeFormIndividual.create_migrate()
-
-            await G2PRegisterIndividualDisability.create_migrate()
-            await G2PRegisterHistoryIndividualDisability.create_migrate()
-            await G2PIntakeFormIndividualDisability.create_migrate()
-
-            await G2PRegisterIndividualProgram.create_migrate()
-            await G2PRegisterHistoryIndividualProgram.create_migrate()
-            await G2PIntakeFormIndividualProgram.create_migrate()
-
-            await G2PRegisterAssistanceEvent.create_migrate()
-            await G2PRegisterHistoryAssistanceEvent.create_migrate()
-            await G2PIntakeFormAssistanceEvent.create_migrate()
-
-            await G2PRegisterIdRenewalRequest.create_migrate()
-            await G2PRegisterHistoryIdRenewalRequest.create_migrate()
-            await G2PIntakeFormIdRenewalRequest.create_migrate()
-
-            await G2PRegisterPartner.create_migrate()
-            await G2PRegisterHistoryPartner.create_migrate()
-            await G2PIntakeFormPartner.create_migrate()
-
-            await G2PRegisterHouseholdProgram.create_migrate()
-            await G2PRegisterHistoryHouseholdProgram.create_migrate()
-            await G2PIntakeFormHouseholdProgram.create_migrate()
-
-            await G2PRegisterHouseholdAsset.create_migrate()
-            await G2PRegisterHistoryHouseholdAsset.create_migrate()
-            await G2PIntakeFormHouseholdAsset.create_migrate()
-
-            await G2PRegisterIndividualShock.create_migrate()
-            await G2PRegisterHistoryIndividualShock.create_migrate()
-            await G2PIntakeFormIndividualShock.create_migrate()
-
-            await G2PRegisterHouseholdHousingAndServices.create_migrate()
-            await G2PRegisterHistoryHouseholdHousingAndServices.create_migrate()
-            await G2PIntakeFormHouseholdHousingAndServices.create_migrate()
-
-            await G2PRegisterIndividualLand.create_migrate()
-            await G2PRegisterHistoryIndividualLand.create_migrate()
-            await G2PIntakeFormIndividualLand.create_migrate()
-
-            await G2PRegisterIndividualLivelihood.create_migrate()
-            await G2PRegisterHistoryIndividualLivelihood.create_migrate()
-            await G2PIntakeFormIndividualLivelihood.create_migrate()
-
-            await G2PRegisterIndividualLivestock.create_migrate()
-            await G2PRegisterHistoryIndividualLivestock.create_migrate()
-            await G2PIntakeFormIndividualLivestock.create_migrate()
-
-            await G2PRegisterIndividualVulnerability.create_migrate()
-            await G2PRegisterHistoryIndividualVulnerability.create_migrate()
-            await G2PIntakeFormIndividualVulnerability.create_migrate()
+            for model in MODELS:
+                await model.create_migrate()
+                await add_missing_columns(model)
 
         asyncio.run(migrate())

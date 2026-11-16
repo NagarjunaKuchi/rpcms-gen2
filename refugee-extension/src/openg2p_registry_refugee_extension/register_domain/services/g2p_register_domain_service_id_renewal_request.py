@@ -1,10 +1,12 @@
 import logging
+from datetime import datetime, timezone
 
 from openg2p_registry_core.services import G2PRegisterDomainService
 
 from sqlalchemy import select
 
-from .utils.mocks_client import call_mock
+from ...integrations import Outcome, get_integrations
+from ...rules.renewal_notifications import first_phone, sms_text
 from .utils.validations import parse_date, validation_error
 
 _logger = logging.getLogger("g2p-register-idrenewal-service")
@@ -50,9 +52,11 @@ class G2PRegisterDomainServiceIdRenewalRequest(G2PRegisterDomainService):
         return " ".join(parts).strip() or str(payload.get("functional_record_id") or "").strip()
 
     async def post_approve(self, change_request, session):
-        """Inform the refugee by SMS (MOCK gateway in dev) when a request is flagged, booked or closed."""
+        """Tell the refugee by SMS when a request is flagged, booked or closed, and record on the request what
+        happened (SENT / FAILED / NO_PHONE / NOT_CONFIGURED) so staff can follow up where it did not go out."""
         from openg2p_registry_core.models import G2PRegisterChangeRequestPayload
 
+        from ..models import G2PRegisterIndividual as Individual
         from ..models import G2PRegisterIdRenewalRequest as Request
 
         payload = (
@@ -65,23 +69,35 @@ class G2PRegisterDomainServiceIdRenewalRequest(G2PRegisterDomainService):
         for row in (payload.change_payload if payload else None) or []:
             if row.get("edit_action") not in (None, "ADD", "UPDATE") or not row.get("status"):
                 continue
-            stored = None
-            if row.get("internal_record_id"):
-                stored = (
-                    await session.execute(
-                        select(Request).where(Request.internal_record_id == row["internal_record_id"])
-                    )
-                ).scalar()
-            merged = {c: getattr(stored, c, None) for c in ("request_ref", "registrant_progres_id", "card_expiry", "appointment_date", "appointment_time", "appointment_location")} if stored else {}
-            merged.update({k: v for k, v in row.items() if v not in (None, "")})
-            to, ref, status = merged.get("registrant_progres_id"), merged.get("request_ref"), row["status"]
-            if not to:
+            stored = await self._find_stored(session, Request, row)
+            if stored is None:
+                _logger.warning("renewal row %s not found after approval; no SMS sent", row.get("request_ref"))
                 continue
-            text = {
-                "EXPIRY_FLAGGED": f"OPM Refugees: Your refugee ID expires on {merged.get('card_expiry')}. Please book a renewal appointment at the Bidibidi service centre.",
-                "APPOINTMENT_BOOKED": f"Renewal appointment booked: {merged.get('appointment_date')}, {merged.get('appointment_time') or ''} {merged.get('appointment_location') or ''}. Bring your current ID. Ref {ref}.".replace("  ", " "),
-                "CLOSED_RENEWED": "Your refugee ID renewal is complete. Thank you for visiting OPM Bidibidi.",
-                "CLOSED_NOT_RENEWED": "Your refugee ID renewal request was closed without renewal. Please contact OPM Bidibidi.",
-            }.get(status)
-            if text:
-                await call_mock("POST", "/sms/v1/messages", {"to": to, "text": text, "ref": ref})
+            text = sms_text(row["status"], stored.request_ref, stored.card_expiry, stored.appointment_date, stored.appointment_time, stored.appointment_location)
+            if not text:
+                continue
+            parent_id = row.get("link_internal_record_id") or stored.link_internal_record_id
+            person = (
+                await session.execute(select(Individual).where(Individual.internal_record_id == parent_id))
+            ).scalar() if parent_id else None
+            phone = first_phone(getattr(person, "phone_numbers", None))
+            if not phone:
+                stored.notification_status = "NO_PHONE"
+            else:
+                result = await get_integrations().send_sms(phone, text, stored.request_ref or "")
+                stored.notification_status = {
+                    Outcome.OK: "SENT",
+                    Outcome.NOT_CONFIGURED: "NOT_CONFIGURED",
+                }.get(result.outcome, "FAILED")
+            stored.notified_on = datetime.now(timezone.utc).date()
+            await session.flush()
+
+    @staticmethod
+    async def _find_stored(session, Request, row):
+        if row.get("internal_record_id"):
+            query = select(Request).where(Request.internal_record_id == row["internal_record_id"])
+        elif row.get("request_ref"):
+            query = select(Request).where(Request.request_ref == row["request_ref"])
+        else:
+            return None
+        return (await session.execute(query.limit(1))).scalar()

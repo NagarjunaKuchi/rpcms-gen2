@@ -5,7 +5,9 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from openg2p_registry_core.services import G2PRegisterDomainService
 
-from .utils.mocks_client import call_mock
+from ...integrations import Outcome, get_integrations
+from ...rules.assistance_duplicates import DEDUP_KEYS, first_duplicate_within, key_of
+from ...rules.assistance_duplicates import message as duplicate_message
 from .utils.validations import as_float, parse_date, validation_error
 
 _logger = logging.getLogger("g2p-register-assistanceevent-service")
@@ -33,18 +35,53 @@ class G2PRegisterDomainServiceAssistanceEvent(G2PRegisterDomainService):
             channel = record.get("capture_channel")
             if channel not in (None, "") and str(channel).upper() not in CAPTURE_CHANNELS:
                 validation_error(f"capture_channel must be one of {sorted(CAPTURE_CHANNELS)}")
+        # Duplicates are refused when the entry is made, so the person entering it sees the reason at once and no
+        # request is left waiting for an approver to discover it. Needs the database, so it opens its own session.
+        from openg2p_fastapi_common.context import get_async_session_maker
 
-    DEDUP_KEYS = ("registrant_progres_id", "assistance_type", "distribution_cycle")
+        async with get_async_session_maker()() as session:
+            await self._check_duplicates(records, session)
+
+    async def _check_duplicates(self, rows: list[dict], session) -> None:
+        """Reject a row whose (ProGres ID, assistance type, cycle) is already recorded, or repeated in the request.
+
+        registry-core's built-in dedup does not cover child (TABLE) registers, so the rule lives here. A partial
+        UPDATE is completed from the stored row first, so changing only the cycle cannot slip past it."""
+        from ..models import G2PRegisterAssistanceEvent as Event
+
+        candidates = []
+        for row in rows:
+            if row.get("edit_action") not in (None, "ADD", "UPDATE"):
+                continue
+            merged, own_id = dict(row), None
+            if row.get("edit_action") == "UPDATE" and row.get("internal_record_id"):
+                own_id = row["internal_record_id"]
+                stored = (await session.execute(select(Event).where(Event.internal_record_id == own_id))).scalar()
+                if stored is not None:
+                    for k in DEDUP_KEYS:
+                        if not row.get(k):
+                            merged[k] = getattr(stored, k)
+            key = key_of(merged)
+            if key is not None:
+                candidates.append((merged, key, own_id))
+
+        within = first_duplicate_within([m for m, _, _ in candidates])
+        if within:
+            validation_error("Duplicate assistance in this request: same registrant, assistance type and cycle")
+        for _, key, own_id in candidates:
+            query = select(Event.internal_record_id).where(
+                Event.registrant_progres_id == key[0],
+                Event.assistance_type == key[1],
+                Event.distribution_cycle == key[2],
+            )
+            if own_id:
+                query = query.where(Event.internal_record_id != own_id)
+            if (await session.execute(query.limit(1))).first():
+                validation_error(duplicate_message(key))
 
     async def pre_approve(self, change_request, session):
-        """Business rule: the same registrant must not receive the same assistance type in the same
-        distribution cycle twice. Registry-core's built-in dedup does NOT cover child (TABLE) registers
-        (verified on the dev stack: two identical events were both approved), so enforce it here, at approval.
-        """
         # Imported lazily: models import this service module.
         from openg2p_registry_core.models import G2PRegisterChangeRequestPayload
-
-        from ..models import G2PRegisterAssistanceEvent as Event
 
         payload = (
             await session.execute(
@@ -53,43 +90,24 @@ class G2PRegisterDomainServiceAssistanceEvent(G2PRegisterDomainService):
                 )
             )
         ).scalar()
-        seen = set()
-        for row in (payload.change_payload if payload else None) or []:
-            if row.get("edit_action") not in (None, "ADD", "UPDATE"):
-                continue
-            key = tuple(str(row.get(k) or "").strip() for k in self.DEDUP_KEYS)
-            if not all(key):
-                continue  # partial UPDATE: the stored row decides; required fields are checked in validation
-            if key in seen:
-                validation_error("Duplicate assistance in this request: same registrant, assistance type and cycle")
-            seen.add(key)
-            query = select(Event.internal_record_id).where(
-                Event.registrant_progres_id == key[0],
-                Event.assistance_type == key[1],
-                Event.distribution_cycle == key[2],
-            )
-            if row.get("edit_action") == "UPDATE" and row.get("internal_record_id"):
-                query = query.where(Event.internal_record_id != row["internal_record_id"])
-            if (await session.execute(query.limit(1))).first():
-                validation_error(
-                    f"Duplicate assistance: registrant {key[0]} already received {key[1]} in cycle {key[2]}"
-                )
+        # Re-checked at approval as a safety net: another request may have been approved since this one was made.
+        await self._check_duplicates(list((payload.change_payload if payload else None) or []), session)
 
-        # Authentication-only check against UNHCR ProGres v4 (a MOCK in dev): record Yes/No on the row.
-        # No personal data comes back and a "No" does not block recording (staff may enter late/offline data).
+        # Confirm the ProGres ID with UNHCR ProGres v4 and record Yes/No on the row. No personal data comes back.
+        # A "No", or ProGres being unavailable, does not block recording (staff may enter late/offline data):
+        # the column stays empty when ProGres could not answer, so "not checked" is never shown as "No".
         rows = list((payload.change_payload if payload else None) or [])
         changed = False
         for row in rows:
             pid = str(row.get("registrant_progres_id") or "").strip()
             if row.get("edit_action") not in (None, "ADD", "UPDATE") or not pid:
                 continue
-            result = await call_mock(
-                "POST",
-                "/progres/v4/authenticate",
-                {"progres_id": pid, "biometric": {"modality": "FACE", "capture": "recorded-by-staff"}},
-            )
-            if result is not None and result[0] == 200:
-                row["progres_authenticated"] = bool(result[1].get("authenticated"))
+            result = await get_integrations().confirm_progres_id(pid)
+            if result.outcome is Outcome.OK:
+                row["progres_authenticated"] = bool(result.data.get("authenticated"))
+                changed = True
+            elif result.outcome is Outcome.NOT_FOUND:
+                row["progres_authenticated"] = False
                 changed = True
         if changed:
             payload.change_payload = rows

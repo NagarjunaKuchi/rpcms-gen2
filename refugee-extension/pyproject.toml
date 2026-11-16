@@ -40,3 +40,7 @@ path = "src/openg2p_registry_refugee_extension/__init__.py"
 # module (env REGISTRY_EXTENSION_MODULE) into sys.modules at startup, so the
 # reference and any variant extension can coexist in one image and be selected
 # by env — no wheel.sources alias, no pip-uninstall dance.
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
