@@ -3,10 +3,13 @@
 what the API does instead of asserting, because duplicate handling on child (TABLE) registers
 has not been verified yet.
 
+NOTE: the built-in dedup did not stop the 2nd identical event (verified 2026-11-16); the rule is now enforced in
+the domain service pre_approve hook, so event #2 is expected to fail at the approve step.
+
 Steps: provision a Household + an Individual (via platform helpers) -> add an AssistanceEvent
 by change request (edit_action ADD) -> approve -> repeat the identical event -> report.
 """
-import json, os, sys, traceback
+import json, os, sys, uuid
 
 rp = os.path.expanduser(os.environ.get("RP_CHECKOUT", "~/registry-platform"))
 sys.path.insert(0, os.path.join(rp, "functional-testing"))
@@ -38,7 +41,7 @@ def add_event(staff, subject_id, event):
     return body, (pl.get("change_request_id") if isinstance(pl, dict) else None)
 
 cfg = Config.from_env()
-event = dict(registrant_progres_id="PRG-TEST-0001", partner_code="WFP", partner_name="World Food Programme",
+event = dict(registrant_progres_id="PRG-T-" + uuid.uuid4().hex[:8], partner_code="WFP", partner_name="World Food Programme",
              assistance_type="FOOD", distribution_cycle="2026-11", quantity=25, unit="kg",
              delivery_date="2026-11-10", capture_channel="ONLINE")
 with StaffClient.login(cfg) as staff:

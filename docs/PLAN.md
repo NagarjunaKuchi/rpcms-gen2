@@ -40,3 +40,11 @@ Not yet reported upstream. Unverified: whether other iam-core consumers or the b
 Seen on the VM with base `0.0.0-develop.716` + our extension. Not checked whether the bare base image fails too.
 Workaround: `pip install packaging` in docker/celery/Dockerfile. Effect of the missing worker: approved submissions are never
 applied to the register (household search found nothing within 90s). Also added the iam-core pin as a precaution (unverified need).
+
+## Finding 4 (2026-11-16): built-in dedup does not cover child (TABLE) registers
+Dev-stack test (scripts/test_assistance.py): two identical AssistanceEvent change requests (same ProGres ID, type, cycle) were both
+approved -> two identical rows. Likely reason (not fully verified): register dedup runs for the change request's own register
+(Individual); the child section register's dedup config is not consulted. Resolution: `pre_approve` hook in
+G2PRegisterDomainServiceAssistanceEvent rejects duplicates at approval time (untested as of this commit).
+Open: the intake/ingest path (offline handover, 214 records) may not call pre_approve -- must be tested; creation-time rejection
+(instead of approval-time) is not possible with the hooks found so far.
