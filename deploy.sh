@@ -48,6 +48,14 @@ done
 code="$(docker inspect -f '{{.State.ExitCode}}' "$sid")"
 [ "$s" = exited ] && [ "$code" = 0 ] || { echo "db-seed did not finish cleanly (status=$s exit=$code); see: cd deploy && docker compose logs db-seed --tail 60" >&2; exit 1; }
 
+log "Waiting for the Master Data seed (code lists and geography) to finish"
+mid="$(cd deploy && docker compose ps -a -q master-data-seed)"
+for i in $(seq 1 90); do
+  ms="$(docker inspect -f '{{.State.Status}}' "$mid")"; [ "$ms" = exited ] && break; sleep 5
+done
+mcode="$(docker inspect -f '{{.State.ExitCode}}' "$mid")"
+[ "$ms" = exited ] && [ "$mcode" = 0 ] || { echo "master-data-seed did not finish cleanly (status=$ms exit=$mcode); see: cd deploy && docker compose logs master-data-seed --tail 60" >&2; exit 1; }
+
 log "Seeding IAM login provider and roles"
 bash scripts/seed-iam.sh
 

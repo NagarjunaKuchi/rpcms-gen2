@@ -33,6 +33,11 @@ x-staff-api-env: &staff-api-env
   REGISTRY_STAFF_PORTAL_API_MASTER_DATA_DB_DBNAME: master_data
   REGISTRY_STAFF_PORTAL_API_MASTER_DATA_DB_USERNAME: master_data_user
   REGISTRY_STAFF_PORTAL_API_MASTER_DATA_DB_PASSWORD: *pg-password
+  REGISTRY_STAFF_PORTAL_API_MASTER_DATA_READ_MODE: api
+  REGISTRY_STAFF_PORTAL_API_MASTER_DATA_API_URL: http://master-data-api:8000
+  REGISTRY_STAFF_PORTAL_API_MASTER_DATA_TOKEN_URL: http://keycloak:8080/realms/staff/protocol/openid-connect/token
+  REGISTRY_STAFF_PORTAL_API_MASTER_DATA_CLIENT_ID: registry-staff-portal
+  REGISTRY_STAFF_PORTAL_API_MASTER_DATA_CLIENT_SECRET: func-gate-client-secret
   REGISTRY_STAFF_PORTAL_API_AUTH_PROVIDER_API_URL: http://iam-staff-portal-api:8000
   REGISTRY_STAFF_PORTAL_API_AUTH_REDIS_URL: redis://redis:6379/0
   REGISTRY_STAFF_PORTAL_API_AUTH_REFRESH_TOKEN_TTL_SECONDS: "86400"
@@ -173,7 +178,10 @@ services:
       start_period: 15s
 
   master-data-api:
-    image: openg2p/master-data-api:1.1.3
+    # Not 1.1.3: that build has no /catalogue API, and the registry base image
+    # (RP_VERSION) reads code lists and geography through it. 'develop' is a
+    # moving tag, so it is pinned by digest; bump the digest deliberately.
+    image: openg2p/master-data-api:develop@sha256:12bf217dde4593dd0b30dae002e09a37e0ab59f174c5c0d4fbc40cab12d3e3a2
     environment:
       MASTER_DATA_API_DB_HOSTNAME: postgres
       MASTER_DATA_API_DB_PORT: "5432"
@@ -194,6 +202,42 @@ services:
       timeout: 5s
       retries: 30
       start_period: 15s
+
+  # Loads Master Data's code lists (gender, marital status, ...) and geography
+  # from a country pack, exactly as the master-data chart's geo-seed Job does.
+  # Without it every dropdown backed by a code list is empty.
+  # Two packs, deliberately: the code lists come from the ETH pack because the
+  # XKM pack ships only 7 lists and the Individual form needs more (age method,
+  # citizenship category, displacement status, ...). Those lists are generic,
+  # not Ethiopian. Geography comes from XKM, the fictitious "Kamuntu" - taking
+  # ETH geography would carry a CC BY-IGO attribution duty and put Ethiopian
+  # places in a Uganda system. There is no Uganda pack (only ETH and XKM ship),
+  # so settlements are not real Bidibidi geography yet.
+  master-data-seed:
+    image: openg2p/master-data-db-seed:develop@sha256:34b4082e4357c609665524c5a4c100a4be411c043e9e4b8104d385d6db4675af
+    restart: "no"
+    environment:
+      PGHOST: postgres
+      PGPORT: "5432"
+      MDS_DB: master_data
+      PGUSER: master_data_user
+      PGPASSWORD: *pg-password
+      PACK_PUBLISH_INITIAL: "true"
+      PACK_AUTO_PUBLISH: "false"
+    # The API creates the schema on start; retry until it exists.
+    command:
+      - sh
+      - -c
+      - |
+        for i in $$(seq 1 40); do
+          python /seed/load_geo_pack.py --pack /openg2p-data/packs/ETH --load codelists \
+            && python /seed/load_geo_pack.py --pack /openg2p-data/packs/XKM --load geo && exit 0
+          echo "master-data schema not ready yet (attempt $$i); retrying in 5s"; sleep 5
+        done
+        exit 1
+    depends_on:
+      master-data-api:
+        condition: service_healthy
 
   awe:
     image: openg2p/openg2p-awe:1.2.2
@@ -444,6 +488,11 @@ services:
       REGISTRY_PARTNER_API_MASTER_DATA_DB_DBNAME: master_data
       REGISTRY_PARTNER_API_MASTER_DATA_DB_USERNAME: master_data_user
       REGISTRY_PARTNER_API_MASTER_DATA_DB_PASSWORD: *pg-password
+      REGISTRY_PARTNER_API_MASTER_DATA_READ_MODE: api
+      REGISTRY_PARTNER_API_MASTER_DATA_API_URL: http://master-data-api:8000
+      REGISTRY_PARTNER_API_MASTER_DATA_TOKEN_URL: http://keycloak:8080/realms/staff/protocol/openid-connect/token
+      REGISTRY_PARTNER_API_MASTER_DATA_CLIENT_ID: registry-staff-portal
+      REGISTRY_PARTNER_API_MASTER_DATA_CLIENT_SECRET: func-gate-client-secret
       REGISTRY_PARTNER_API_MINIO_ENDPOINT: minio:9000
       REGISTRY_PARTNER_API_MINIO_SECURE: "false"
       REGISTRY_PARTNER_API_MINIO_ACCESS_KEY: *minio-root-user
@@ -502,6 +551,11 @@ services:
       REGISTRY_CELERY_WORKERS_MASTER_DATA_DB_DBNAME: master_data
       REGISTRY_CELERY_WORKERS_MASTER_DATA_DB_USERNAME: master_data_user
       REGISTRY_CELERY_WORKERS_MASTER_DATA_DB_PASSWORD: *pg-password
+      REGISTRY_CELERY_WORKERS_MASTER_DATA_READ_MODE: api
+      REGISTRY_CELERY_WORKERS_MASTER_DATA_API_URL: http://master-data-api:8000
+      REGISTRY_CELERY_WORKERS_MASTER_DATA_TOKEN_URL: http://keycloak:8080/realms/staff/protocol/openid-connect/token
+      REGISTRY_CELERY_WORKERS_MASTER_DATA_CLIENT_ID: registry-staff-portal
+      REGISTRY_CELERY_WORKERS_MASTER_DATA_CLIENT_SECRET: func-gate-client-secret
       REGISTRY_CELERY_WORKERS_CELERY_BROKER_URL: redis://redis:6379/0
       REGISTRY_CELERY_WORKERS_CELERY_BACKEND_URL: redis://redis:6379/0
       REGISTRY_CELERY_WORKERS_WORKER_QUEUE: registry_worker_queue
