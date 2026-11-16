@@ -58,6 +58,12 @@ def add_and_approve(staff, parent_id, ev):
         verify_and_approve_cr(staff, cr)
         return "APPROVED"
     except StaffApiError as e:
+        # A change request that fails approval stays PENDING and the registry allows only one pending request per
+        # record+section, so reject it explicitly (with the reason); otherwise it blocks every later event.
+        try:
+            staff.post_json("/change-requests/reject_change_request", {"change_request_id": cr, "rejection_reason": str(e)[:480]})
+        except StaffApiError as e2:
+            print(f"     could not reject change request {cr}: {e2}")
         return str(e)
 
 
