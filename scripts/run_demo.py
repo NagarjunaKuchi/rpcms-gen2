@@ -42,7 +42,7 @@ def provision_person(staff, cfg, household_id, first, last, progres_id, expiry):
         if section_id == "in_demographic_details":
             payload.update({"progres_id": progres_id, "progres_card_expiry": expiry})
         return payload
-    _intake.unique_individual_name = lambda marker: (first, "", last)
+    _intake.unique_individual_name = lambda marker: (first, "NA", last)  # middle_name is mandatory; demo gives none, so "NA" placeholder
     _intake.build_individual_section_payload = build
     try:
         return provision_record(staff, cfg, INDIVIDUAL, household_id=household_id).internal_record_id
