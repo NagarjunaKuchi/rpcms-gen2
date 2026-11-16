@@ -31,7 +31,7 @@ def add_event(staff, subject_id, event):
     payload = {
         "register_id": REGISTER_INDIVIDUAL, "tab_id": TAB, "section_id": SECTION,
         "section_register_id": AE_REGISTER, "internal_record_id": subject_id,
-        "change_payload": [{"edit_action": "ADD", **event}],
+        "change_payload": [{"edit_action": "ADD", "link_internal_record_id": subject_id, **event}],
     }
     body = staff.post_json("/change-requests/create_change_request", payload)
     pl = staff.payload(body)
