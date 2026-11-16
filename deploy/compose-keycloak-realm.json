@@ -19,10 +19,21 @@
       "directAccessGrantsEnabled": true,
       "serviceAccountsEnabled": true,
       "standardFlowEnabled": true,
-      "redirectUris": ["http://localhost:3000/*", "http://127.0.0.1:3000/*", "*"],
-      "webOrigins": ["*"],
+      "redirectUris": [
+        "http://localhost:3000/*",
+        "http://127.0.0.1:3000/*",
+        "*"
+      ],
+      "webOrigins": [
+        "*"
+      ],
       "protocol": "openid-connect",
-      "defaultClientScopes": ["openid", "profile", "email", "roles"],
+      "defaultClientScopes": [
+        "openid",
+        "profile",
+        "email",
+        "roles"
+      ],
       "protocolMappers": [
         {
           "name": "audience-mapper",
@@ -58,7 +69,12 @@
       "serviceAccountsEnabled": true,
       "standardFlowEnabled": false,
       "protocol": "openid-connect",
-      "defaultClientScopes": ["openid", "profile", "email", "roles"]
+      "defaultClientScopes": [
+        "openid",
+        "profile",
+        "email",
+        "roles"
+      ]
     },
     {
       "clientId": "consent-manager",
@@ -70,27 +86,59 @@
       "serviceAccountsEnabled": true,
       "standardFlowEnabled": false,
       "protocol": "openid-connect",
-      "defaultClientScopes": ["openid", "profile", "email", "roles"]
+      "defaultClientScopes": [
+        "openid",
+        "profile",
+        "email",
+        "roles"
+      ]
     }
   ],
   "roles": {
     "client": {
       "registry-staff-portal": [
-        { "name": "Operations Administrator", "composite": false },
-        { "name": "Technical Administrator", "composite": false },
-        { "name": "Registrar", "composite": false },
-        { "name": "Verifier", "composite": false },
-        { "name": "Approver", "composite": false }
+        {
+          "name": "Operations Administrator",
+          "composite": false
+        },
+        {
+          "name": "Technical Administrator",
+          "composite": false
+        },
+        {
+          "name": "Registrar",
+          "composite": false
+        },
+        {
+          "name": "Verifier",
+          "composite": false
+        },
+        {
+          "name": "Approver",
+          "composite": false
+        }
       ],
       "awe-admin-portal": [
-        { "name": "AWE_ADMIN", "composite": false }
+        {
+          "name": "AWE_ADMIN",
+          "composite": false
+        }
       ],
       "partner-management": [
-        { "name": "partner_manager", "composite": false }
+        {
+          "name": "partner_manager",
+          "composite": false
+        }
       ],
       "consent-manager": [
-        { "name": "CONSENT_MANAGER_ADMIN", "composite": false },
-        { "name": "CONSENT_MANAGER_APPROVER", "composite": false }
+        {
+          "name": "CONSENT_MANAGER_ADMIN",
+          "composite": false
+        },
+        {
+          "name": "CONSENT_MANAGER_APPROVER",
+          "composite": false
+        }
       ]
     }
   },
@@ -103,14 +151,20 @@
       "lastName": "User",
       "email": "admin@functional.invalid",
       "credentials": [
-        { "type": "password", "value": "admin", "temporary": false }
+        {
+          "type": "password",
+          "value": "admin",
+          "temporary": false
+        }
       ],
       "clientRoles": {
         "registry-staff-portal": [
           "Operations Administrator",
           "Technical Administrator"
         ],
-        "awe-admin-portal": ["AWE_ADMIN"]
+        "awe-admin-portal": [
+          "AWE_ADMIN"
+        ]
       }
     },
     {
@@ -121,7 +175,11 @@
       "lastName": "Tester",
       "email": "func-ft-e2e@functional.invalid",
       "credentials": [
-        { "type": "password", "value": "func-ft-e2e-pass", "temporary": false }
+        {
+          "type": "password",
+          "value": "func-ft-e2e-pass",
+          "temporary": false
+        }
       ],
       "requiredActions": [],
       "clientRoles": {
@@ -129,7 +187,59 @@
           "Operations Administrator",
           "Technical Administrator"
         ],
-        "awe-admin-portal": ["AWE_ADMIN"]
+        "awe-admin-portal": [
+          "AWE_ADMIN"
+        ]
+      }
+    },
+    {
+      "username": "alex.carter",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Alex",
+      "lastName": "Carter",
+      "email": "alex.carter@functional.invalid",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "alex.carter-pass",
+          "temporary": false
+        }
+      ],
+      "requiredActions": [],
+      "clientRoles": {
+        "registry-staff-portal": [
+          "Operations Administrator",
+          "Technical Administrator"
+        ],
+        "awe-admin-portal": [
+          "AWE_ADMIN"
+        ]
+      }
+    },
+    {
+      "username": "nina.patel",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Nina",
+      "lastName": "Patel",
+      "email": "nina.patel@functional.invalid",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "nina.patel-pass",
+          "temporary": false
+        }
+      ],
+      "requiredActions": [],
+      "clientRoles": {
+        "registry-staff-portal": [
+          "Operations Administrator",
+          "Technical Administrator"
+        ],
+        "awe-admin-portal": [
+          "AWE_ADMIN"
+        ]
       }
     }
   ]
