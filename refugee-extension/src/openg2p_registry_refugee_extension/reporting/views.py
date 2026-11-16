@@ -90,6 +90,17 @@ REPORTING_VIEWS_SQL = [
     GROUP BY 1
     """,
     """
+    CREATE OR REPLACE VIEW rpcms_rpt_self_reliance AS
+    SELECT round_label,
+           count(*)                                                       AS households_surveyed,
+           count(*) FILTER (WHERE has_income = 'YES')                     AS households_with_income,
+           count(*) FILTER (WHERE self_reliance_index IS NOT NULL)        AS households_scored,
+           round(avg(self_reliance_index)::numeric, 1)                    AS average_index
+    FROM g2p_register_selfrel_surveys
+    WHERE record_status = 'ACTIVE' AND round_label IS NOT NULL
+    GROUP BY round_label
+    """,
+    """
     CREATE OR REPLACE VIEW rpcms_rpt_submissions AS
     SELECT submitted_at, system, quarter, status, records_sent, external_reference, submitted_by, detail
     FROM rpcms_report_submission

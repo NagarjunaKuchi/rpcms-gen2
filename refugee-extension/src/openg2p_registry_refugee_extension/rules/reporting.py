@@ -51,6 +51,8 @@ def build_indicators(quarter: str, summary: dict) -> dict:
         ("RPCMS-EVENTS-AUTHENTICATED", "Assistance events with a confirmed ProGres ID", "events_authenticated", "count"),
         ("RPCMS-PERSONS-REACHED", "Distinct registrants reached with assistance", "persons_reached", "count"),
         ("RPCMS-DUPLICATES-FLAGGED", "Duplicate assistance attempts refused", "duplicates_flagged", "count"),
+        ("RPCMS-HOUSEHOLDS-SURVEYED", "Households with a self-reliance survey in the quarter", "households_surveyed", "count"),
+        ("RPCMS-HOUSEHOLDS-WITH-INCOME", "Surveyed households that earn income (latest survey in the quarter)", "households_with_income", "count"),
     ]
     indicators = []
     for code, name, key, unit in spec:

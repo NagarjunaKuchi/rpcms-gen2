@@ -32,4 +32,5 @@ INSERT INTO "public"."g2p_register_ui_tab_sections" ("tab_section_id","register_
 ('f0000000-0000-4000-8000-000000000501','a0000000-0000-4000-8000-000000000004','project_info_tab','pj_project',10),
 ('f0000000-0000-4000-8000-000000000502','a0000000-0000-4000-8000-000000000004','project_info_tab','pj_funding',20),
 ('f0000000-0000-4000-8000-000000000503','a0000000-0000-4000-8000-000000000004','project_mou_tab','pj_table_mou',10),
-('f0000000-0000-4000-8000-000000000504','a0000000-0000-4000-8000-000000000004','project_service_points_tab','pj_table_service_points',10);
+('f0000000-0000-4000-8000-000000000504','a0000000-0000-4000-8000-000000000004','project_service_points_tab','pj_table_service_points',10),
+('f0000000-0000-4000-8000-000000000511','a0000000-0000-4000-8000-000000000002','household_self_reliance_tab','hh_table_self_reliance',10);

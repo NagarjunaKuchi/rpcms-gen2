@@ -66,6 +66,7 @@ from .partner import (
 from .project import G2PRegisterSchemaProject, G2PRegisterHistorySchemaProject, G2PIntakeFormSchemaProject
 from .project_mou import G2PRegisterSchemaProjectMou, G2PRegisterHistorySchemaProjectMou, G2PIntakeFormSchemaProjectMou
 from .service_point import G2PRegisterSchemaServicePoint, G2PRegisterHistorySchemaServicePoint, G2PIntakeFormSchemaServicePoint
+from .self_reliance_survey import G2PRegisterSchemaSelfRelianceSurvey, G2PRegisterHistorySchemaSelfRelianceSurvey, G2PIntakeFormSchemaSelfRelianceSurvey
 from .id_renewal_request import (
     G2PRegisterSchemaIdRenewalRequest,
     G2PRegisterHistorySchemaIdRenewalRequest,

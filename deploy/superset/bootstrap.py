@@ -132,7 +132,7 @@ def main():
     db = database_id()
     ds = {t: dataset_id(db, t) for t in (
         "rpcms_rpt_summary", "rpcms_rpt_partner_performance", "rpcms_rpt_reach_by_location", "rpcms_rpt_expenditure",
-        "rpcms_rpt_events_by_month", "rpcms_rpt_submissions")}
+        "rpcms_rpt_events_by_month", "rpcms_rpt_self_reliance", "rpcms_rpt_submissions")}
     dash = dashboard_id()
 
     summary = ds["rpcms_rpt_summary"]
@@ -147,6 +147,12 @@ def main():
     charts["monthly"] = upsert_chart("Assistance events by month", "echarts_timeseries_bar", ds["rpcms_rpt_events_by_month"], {
         "x_axis": "month", "time_grain_sqla": "P1M", "metrics": [sum_metric("events", "Events"), sum_metric("events_authenticated", "Authenticated")],
         "groupby": [], "row_limit": 10000, "show_legend": True, "orientation": "vertical"}, dash)
+    charts["sr_index"] = upsert_chart("Self-reliance index by survey round", "echarts_timeseries_bar", ds["rpcms_rpt_self_reliance"], {
+        "x_axis": "round_label", "metrics": [max_metric("average_index", "Average index (0-100)")],
+        "groupby": [], "row_limit": 1000, "show_legend": False, "orientation": "vertical"}, dash)
+    charts["sr_income"] = upsert_chart("Households with an income source by survey round", "echarts_timeseries_bar", ds["rpcms_rpt_self_reliance"], {
+        "x_axis": "round_label", "metrics": [sum_metric("households_surveyed", "Surveyed"), sum_metric("households_with_income", "With income")],
+        "groupby": [], "row_limit": 1000, "show_legend": True, "orientation": "vertical"}, dash)
     charts["partner_table"] = upsert_chart("Partner performance", "table", ds["rpcms_rpt_partner_performance"], table_params(
         ["partner_name", "compliance_status", "planned_households", "persons_reached", "events", "events_authenticated"]), dash)
     charts["expenditure"] = upsert_chart("Expenditure by project and quarter", "table", ds["rpcms_rpt_expenditure"], table_params(
@@ -158,7 +164,8 @@ def main():
              "duplicates": "Duplicate assistance cases flagged", "persons": "Persons reached with assistance",
              "reach": "Reach by delivery location", "monthly": "Assistance events by month",
              "partner_table": "Partner performance", "expenditure": "Expenditure by project and quarter",
-             "submissions": "Reports sent to AMP and NIMES"}
+             "submissions": "Reports sent to AMP and NIMES",
+             "sr_index": "Self-reliance index by survey round", "sr_income": "Households with an income source by survey round"}
 
     def chart_node(key, row, width, height):
         node = f"CHART-{key}"
@@ -169,6 +176,7 @@ def main():
               "HEADER_ID": {"id": "HEADER_ID", "type": "HEADER", "meta": {"text": TITLE}}}
     rows = [("ROW-kpi", [("partners", 3, 16), ("authenticated", 3, 16), ("duplicates", 3, 16), ("persons", 3, 16)]),
             ("ROW-reach", [("reach", 6, 50), ("monthly", 6, 50)]),
+            ("ROW-selfreliance", [("sr_index", 6, 40), ("sr_income", 6, 40)]),
             ("ROW-partners", [("partner_table", 12, 30)]),
             ("ROW-money", [("expenditure", 12, 40)]),
             ("ROW-sent", [("submissions", 12, 30)])]

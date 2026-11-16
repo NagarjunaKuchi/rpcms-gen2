@@ -3,13 +3,13 @@ import os
 import urllib.parse
 import urllib.request
 import uuid
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 
 from conftest import MOCKS, wait_for
 
-from helpers.config import REGISTER_INDIVIDUAL
+from helpers.config import REGISTER_HOUSEHOLD, REGISTER_INDIVIDUAL
 from helpers.flows import intake as _intake
 from helpers.flows.awe import approve_two_stage_awe
 from helpers.flows.intake import provision_household, provision_record, save_intake_section
@@ -21,6 +21,7 @@ PARTNER = "a0000000-0000-4000-8000-000000000003"
 PARTNER_FORM = "c1000000-0000-4000-8000-000000000003"
 AE = "b0000000-0000-4000-8000-0000000000a0"
 IR = "b0000000-0000-4000-8000-0000000000a1"
+SRV = "b0000000-0000-4000-8000-0000000000b2"
 KNOWN_PROGRES_ID = "UGA-00423318"  # active in the mock ProGres
 
 
@@ -423,6 +424,60 @@ def test_report_requests_are_validated(staff, cfg):
     assert status == 409 and "Nothing to send" in reason(body)
 
 
+# ---------------------------------------------------------------- Self-reliance survey -------------------
+
+def survey(staff, cfg, household, label, action="ADD", **row):
+    return change(staff, cfg, household, "household_self_reliance_tab", "hh_table_self_reliance", SRV,
+                  dict(round_label=label, **row), action, label, register=REGISTER_HOUSEHOLD)
+
+
+def survey_rows(staff, household):
+    return rows(staff, household, "household_self_reliance_tab", SRV, REGISTER_HOUSEHOLD)
+
+
+def test_self_reliance_survey_is_scored_and_feeds_the_reports(staff, cfg):
+    hh = provision_household(staff, cfg).internal_record_id
+    today = date.today()
+    first = dict(survey_date=(today - timedelta(days=1)).isoformat(), zone="Zone 3", food_source="ASSISTANCE_ONLY",
+                 has_income="NO", children_in_school="ONE_TO_TWO", savings_group_member="NO")
+    second = dict(survey_date=today.isoformat(), zone="Zone 3", food_source="OWN_PRODUCTION_AND_ASSISTANCE", has_income="YES",
+                  income_source="vegetable sales", children_in_school="THREE_OR_MORE", savings_group_member="YES")
+    assert survey(staff, cfg, hh, "2026-R1", **first) == "APPROVED"
+    assert survey(staff, cfg, hh, "2026-R2", **second) == "APPROVED"
+
+    def scored():
+        found = {r["round_label"]: r for r in survey_rows(staff, hh)}
+        return found if len(found) == 2 and all(r.get("self_reliance_index") is not None for r in found.values()) else None
+
+    found = wait_for(scored, what="both rounds scored")
+    assert found["2026-R1"]["self_reliance_index"] == 8 and found["2026-R2"]["self_reliance_index"] == 80
+    assert found["2026-R2"]["index_version"] == "rpcms-v1" and found["2026-R2"]["index_computed_on"]
+
+    # An unfinished survey is kept, but has no index: it is not scored as 0.
+    unfinished = {k: v for k, v in second.items() if k != "savings_group_member"}
+    assert survey(staff, cfg, hh, "2026-R3", **unfinished) == "APPROVED"
+    r3 = wait_for(lambda: next((r for r in survey_rows(staff, hh) if r["round_label"] == "2026-R3"), None), what="third round stored")
+    assert r3.get("self_reliance_index") in (None, "")
+
+    # One survey per household and round, wrong answers and future dates are refused when entered.
+    assert "already has a survey for round 2026-R2" in survey(staff, cfg, hh, "2026-R2", **second)
+    assert "food_source must be one of" in survey(staff, cfg, hh, "2026-R4", **dict(second, food_source="BARTER"))
+    assert "round_label must look like" in survey(staff, cfg, hh, "Round 4", **second)
+    assert "future" in survey(staff, cfg, hh, "2026-R4", **dict(second, survey_date=(today + timedelta(days=3)).isoformat()))
+    assert "no income" in survey(staff, cfg, hh, "2026-R4", **dict(second, has_income="NO"))
+
+    # Changing an answer re-scores the survey.
+    stored = next(r for r in survey_rows(staff, hh) if r["round_label"] == "2026-R1")
+    assert survey(staff, cfg, hh, "2026-R1", action="UPDATE", internal_record_id=stored["internal_record_id"], savings_group_member="YES") == "APPROVED"
+    wait_for(lambda: next((r for r in survey_rows(staff, hh) if r["round_label"] == "2026-R1" and r.get("self_reliance_index") == 23), None),
+             what="first round re-scored")
+
+    # The household is counted once in the quarter's indicators, by its latest survey (income: yes).
+    status, preview = report_call(staff, "GET", "/preview", params={"system": "NIMES", "quarter": today_quarter()})
+    codes = {i["code"]: i["value"] for i in preview["payload"]["indicators"]}
+    assert status == 200 and codes["RPCMS-HOUSEHOLDS-SURVEYED"] >= 1 and codes["RPCMS-HOUSEHOLDS-WITH-INCOME"] >= 1
+
+
 def test_dashboard_charts_show_the_registered_data():
     """The Superset dashboard, signed in as its admin, returns real rows from the reporting views."""
     import httpx
@@ -444,6 +499,9 @@ def test_dashboard_charts_show_the_registered_data():
         assert chart_rows("Persons reached with assistance")[0]["Persons reached"] >= 1
         assert any(r.get("Persons reached") for r in chart_rows("Reach by delivery location"))
         assert any(r.get("currency") == "UGX" for r in chart_rows("Expenditure by project and quarter"))
+        by_round = {r["round_label"]: r for r in chart_rows("Households with an income source by survey round")}
+        assert by_round["2026-R2"]["Surveyed"] >= 1 and by_round["2026-R2"]["With income"] >= 1
+        assert any(r.get("Average index (0-100)") for r in chart_rows("Self-reliance index by survey round"))
         # The dashboard's database role sees the reporting views and nothing else.
         dash = c.get("/api/v1/dashboard/rpcms-national", headers=h)
         assert dash.status_code == 200 and dash.json()["result"]["published"] is True

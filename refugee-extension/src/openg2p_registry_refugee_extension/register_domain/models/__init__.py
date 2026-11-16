@@ -99,6 +99,7 @@ from .partner import (
 from .project import G2PRegisterProject, G2PRegisterHistoryProject, G2PIntakeFormProject
 from .project_mou import G2PRegisterProjectMou, G2PRegisterHistoryProjectMou, G2PIntakeFormProjectMou
 from .service_point import G2PRegisterServicePoint, G2PRegisterHistoryServicePoint, G2PIntakeFormServicePoint
+from .self_reliance_survey import G2PRegisterSelfRelianceSurvey, G2PRegisterHistorySelfRelianceSurvey, G2PIntakeFormSelfRelianceSurvey
 from .id_renewal_request import (
     G2PRegisterIdRenewalRequest,
     G2PRegisterHistoryIdRenewalRequest,

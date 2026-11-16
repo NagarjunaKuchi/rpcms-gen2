@@ -26,6 +26,7 @@ Common: `Authorization: Bearer <key>` when a key is set; timeout `INTEGRATION_TI
 Sent only when a person calls `POST /rpcms-reports/submit`; nothing is scheduled.
 - AMP `POST /amp/v1/expenditure`: `{"quarter": "2026-Q4", "items": [{"amp_record", "project_code", "currency", "amount", "events"}]}` -> `{"accepted": true, "reference"}`. Spend is the sum of assistance event amounts by project and quarter (by delivery date). Projects with no AMP record number are not sent.
 - NIMES `POST /nimes/v1/indicators`: `{"quarter", "indicators": [{"code", "name", "value", "unit"}]}` -> `{"accepted": true, "reference"}`. Configure with `REGISTRY_EXTENSIONS_NIMES_BASE_URL` / `_API_KEY`.
+The NIMES indicators also carry `RPCMS-HOUSEHOLDS-SURVEYED` and `RPCMS-HOUSEHOLDS-WITH-INCOME`: each household counts once, by its latest self-reliance survey dated in the quarter; left out when nothing was surveyed. They are RPCMS working codes, not NDP IV codes.
 Every attempt (SENT, FAILED, NOT_CONFIGURED) is logged in `rpcms_report_submission`.
 
 ## Behaviour when a system is not available

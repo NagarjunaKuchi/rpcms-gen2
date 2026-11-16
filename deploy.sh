@@ -28,7 +28,7 @@ for p in 3000 15432 18080 18081 18082 18083 18088 18090 18091 18100; do
 done
 
 log "Building images and starting the stack (first run downloads/builds several GB; be patient)"
-( cd deploy && docker compose up -d --build )
+( cd deploy && docker compose build && docker compose up -d )
 
 log "Waiting for staff-api to become healthy (up to 5 min)"
 cid="$(cd deploy && docker compose ps -q staff-api)"

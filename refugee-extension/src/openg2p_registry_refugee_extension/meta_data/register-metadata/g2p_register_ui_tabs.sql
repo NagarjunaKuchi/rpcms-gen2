@@ -13,4 +13,5 @@ INSERT INTO "public"."g2p_register_ui_tabs" ("tab_id","register_id","tab_label",
 ('partner_info_tab','a0000000-0000-4000-8000-000000000003','partner_info_tab',1,'TRUE'),
 ('project_info_tab','a0000000-0000-4000-8000-000000000004','project_info_tab',1,'TRUE'),
 ('project_mou_tab','a0000000-0000-4000-8000-000000000004','project_mou_tab',2,'TRUE'),
-('project_service_points_tab','a0000000-0000-4000-8000-000000000004','project_service_points_tab',3,'TRUE');
+('project_service_points_tab','a0000000-0000-4000-8000-000000000004','project_service_points_tab',3,'TRUE'),
+('household_self_reliance_tab','a0000000-0000-4000-8000-000000000002','household_self_reliance_tab',5,'TRUE');

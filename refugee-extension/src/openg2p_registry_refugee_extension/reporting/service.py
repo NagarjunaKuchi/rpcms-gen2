@@ -41,6 +41,12 @@ class ReportingService:
                                  "WHERE record_status = 'ACTIVE' AND delivery_date IS NULL")).scalar()
             dups = (await one("SELECT count(*) FROM rpcms_duplicate_attempt "
                               "WHERE detected_at >= :a AND detected_at < :b", a=start, b=end)).scalar()
+            # Each household counts once, by its latest survey dated in the quarter.
+            surveys = (await one(
+                "SELECT count(*) AS n, count(*) FILTER (WHERE has_income = 'YES') AS with_income FROM ("
+                "SELECT DISTINCT ON (link_internal_record_id) has_income FROM g2p_register_selfrel_surveys "
+                "WHERE record_status = 'ACTIVE' AND survey_date >= :a AND survey_date < :b "
+                "ORDER BY link_internal_record_id, survey_date DESC) latest", a=start, b=end)).one()
         return {
             "quarter": quarter,
             "partners_active": partners.n,
@@ -50,6 +56,9 @@ class ReportingService:
             "events_authenticated": events.authenticated,
             "persons_reached": events.persons,
             "duplicates_flagged": dups,
+            # None (not 0) when nothing was surveyed in the quarter, so the indicator is left out, not reported as zero.
+            "households_surveyed": surveys.n or None,
+            "households_with_income": surveys.with_income if surveys.n else None,
             "events_without_delivery_date": undated,
         }
 
