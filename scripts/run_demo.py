@@ -24,12 +24,30 @@ from helpers.flows.intake import provision_household, provision_record  # noqa: 
 from helpers.flows.change_request import verify_and_approve_cr  # noqa: E402
 from helpers.flows.register import search_register_by_text  # noqa: E402
 from helpers.profiles import INDIVIDUAL  # noqa: E402
+import helpers.flows.intake as _intake  # noqa: E402
 
 AE = "b0000000-0000-4000-8000-0000000000a0"
 TAB, SECTION = "individual_assistance_tab", "in_table_assistance_events"
 CYCLE, ATYPE, AMOUNT = "2026-03", "CASH_FOR_FOOD", 150000
 MARY, NEIGHBOUR = "UGA-00423318", "UGA-00419907"
 RESULTS = []
+
+
+def provision_person(staff, cfg, household_id, first, last, progres_id, expiry):
+    """Create an approved Individual with a real name + ProGres ID through the normal intake flow.
+    The helper generates random names, so we swap its name generator and demographic payload for this call."""
+    orig_name, orig_build = _intake.unique_individual_name, _intake.build_individual_section_payload
+    def build(section_id, hh, name):
+        payload = orig_build(section_id, hh, name)
+        if section_id == "in_demographic_details":
+            payload.update({"progres_id": progres_id, "progres_card_expiry": expiry})
+        return payload
+    _intake.unique_individual_name = lambda marker: (first, "", last)
+    _intake.build_individual_section_payload = build
+    try:
+        return provision_record(staff, cfg, INDIVIDUAL, household_id=household_id).internal_record_id
+    finally:
+        _intake.unique_individual_name, _intake.build_individual_section_payload = orig_name, orig_build
 
 
 def step(screen, name, status, detail=""):
@@ -117,10 +135,13 @@ def main():
     with StaffClient.login(cfg) as staff:
         if find_events(staff, MARY):
             sys.exit("Demo ProGres IDs already have events: this stack is not fresh. Run ./reset.sh && ./deploy.sh, then retry.")
-        hh = provision_household(staff, cfg)
-        parent = provision_record(staff, cfg, INDIVIDUAL, household_id=hh.internal_record_id).internal_record_id
-        print(f"  (set-up) stand-in household/person created in the registry; person record {parent}")
-        print("  NOTE: the stand-in person has a generated name and no ProGres ID field yet, so all assistance rows below attach to it.")
+        hh = provision_household(staff, cfg).internal_record_id
+        hh2 = provision_household(staff, cfg).internal_record_id
+        mary_rec = provision_person(staff, cfg, hh, "Mary", "Poni", MARY, "2026-03-31")
+        nbr_rec = provision_person(staff, cfg, hh2, "Joseph", "Lado", NEIGHBOUR, "2027-06-30")
+        batch_rec = provision_person(staff, cfg, hh2, "Zone3", "OfflineBatch", "UGA-0000000", "2030-01-01")
+        print(f"  (set-up) Mary Poni {mary_rec} ({MARY}), Joseph Lado {nbr_rec} ({NEIGHBOUR}) created via intake + approval")
+        print("  NOTE: household size 5 / Zone 3 are not modelled yet; the offline-batch IDs (UGA-1000000..) have no person records, so those rows attach to a placeholder person 'Zone3 OfflineBatch'.")
 
         # ---- Screen 4: authenticate with ProGres v4 (mock) -------------------------------------------
         _, auth = mock("POST", "/progres/v4/authenticate", {"progres_id": MARY, "biometric": {"modality": "FACE", "capture": "demo-capture"}})
@@ -130,24 +151,24 @@ def main():
         step("4", "Inactive/unknown ID is NOT authenticated (mock)", "PASS" if not bad["authenticated"] else "FAIL")
 
         # ---- Screen 5: duplicate assistance check ----------------------------------------------------
-        r = add_and_approve(staff, parent, event(NEIGHBOUR, "WNRP", "West Nile Relief Partners", "2026-03-02", "DST-WNRP-0302-0188"))
+        r = add_and_approve(staff, nbr_rec, event(NEIGHBOUR, "WNRP", "West Nile Relief Partners", "2026-03-02", "DST-WNRP-0302-0188"))
         step("5", "Other partner's earlier handover recorded in shared register", "PASS" if r == "APPROVED" else "FAIL", "" if r == "APPROVED" else r[:200])
         time.sleep(3)  # let the worker apply the approved change and index the row for search
         mine, theirs = find_events(staff, MARY), find_events(staff, NEIGHBOUR)
         step("5", "Mary: no duplicate found before handover (search by ProGres ID)", "PASS" if not mine else "FAIL")
         step("5", "UGA-00419907: duplicate flagged before handover", "PASS" if theirs and "WNRP" in str(theirs[0].get("record_name")) else "FAIL", str(theirs[0].get("record_name")) if theirs else "search found nothing")
-        r = add_and_approve(staff, parent, event(NEIGHBOUR, "NHU", "Nile Hope Uganda", "2026-03-05", "DST-NHU-0305-00001"))
+        r = add_and_approve(staff, nbr_rec, event(NEIGHBOUR, "NHU", "Nile Hope Uganda", "2026-03-05", "DST-NHU-0305-00001"))
         step("5", "Registry itself rejects the duplicate if recorded anyway", "PASS" if "Duplicate assistance" in r else "FAIL", r[:160])
 
         # ---- Screen 6: handover + offline batch sync -----------------------------------------------------
-        r = add_and_approve(staff, parent, event(MARY, "NHU", "Nile Hope Uganda", "2026-03-05", "DST-NHU-0305-00214"))
+        r = add_and_approve(staff, mary_rec, event(MARY, "NHU", "Nile Hope Uganda", "2026-03-05", "DST-NHU-0305-00214"))
         step("6", "Mary's handover recorded", "PASS" if r == "APPROVED" else "FAIL", "" if r == "APPROVED" else r[:200])
         n, dups = a.records, 3
         ids = [f"UGA-{1000000 + i}" for i in range(n - dups)]
         batch = ids + ids[:dups]  # last 3 repeat earlier IDs -> duplicates inside the batch
         approved = flagged = errors = 0; t0 = time.time()
         for i, pid in enumerate(batch):
-            r = add_and_approve(staff, parent, dict(event(pid, "NHU", "Nile Hope Uganda", "2026-03-05", f"DST-NHU-0305-{i:05d}"), capture_channel="OFFLINE_HANDOVER", offline_batch_id="BATCH-Z3-A"))
+            r = add_and_approve(staff, batch_rec, dict(event(pid, "NHU", "Nile Hope Uganda", "2026-03-05", f"DST-NHU-0305-{i:05d}"), capture_channel="OFFLINE_HANDOVER", offline_batch_id="BATCH-Z3-A"))
             if r == "APPROVED": approved += 1
             elif "Duplicate assistance" in r: flagged += 1
             else:

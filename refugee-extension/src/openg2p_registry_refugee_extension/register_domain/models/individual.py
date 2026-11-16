@@ -32,6 +32,8 @@ class G2PIndividual:
     )
     identity_evidence_type: Mapped[IdentityEvidenceTypeEnum] = mapped_column(String, nullable=True)
     legacy_program_ids: Mapped[dict] = mapped_column(JSON, nullable=True)
+    progres_id: Mapped[str] = mapped_column(String, nullable=True, index=True)
+    progres_card_expiry: Mapped[Date] = mapped_column(Date, nullable=True)
 
     full_name: Mapped[str] = mapped_column(String, nullable=True, index=True)
     alias_names: Mapped[list] = mapped_column(JSON, nullable=True)

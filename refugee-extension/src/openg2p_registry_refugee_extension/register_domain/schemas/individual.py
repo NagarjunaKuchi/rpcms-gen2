@@ -31,6 +31,8 @@ class G2PSchemaIndividual:
     foundational_id_verification_status: Optional[VerificationStatusEnum] = None
     identity_evidence_type: Optional[IdentityEvidenceTypeEnum] = None
     legacy_program_ids: Optional[dict] = None
+    progres_id: Optional[str] = None
+    progres_card_expiry: Optional[date] = None
 
     full_name: Optional[str] = None
     alias_names: Optional[List[str]] = None

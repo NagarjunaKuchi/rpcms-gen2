@@ -71,6 +71,7 @@ class G2PRegisterDomainServiceIndividual(G2PRegisterDomainService):
             "alias_names",
             "foundational_id",
             "foundational_id_masked",
+            "progres_id",
             "birth_date",
             "plus_code",
             "address_line_1",
