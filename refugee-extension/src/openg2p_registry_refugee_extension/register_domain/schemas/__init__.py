@@ -58,3 +58,8 @@ from .individual_vulnerability import (
     G2PRegisterHistorySchemaIndividualVulnerability,
     G2PIntakeFormSchemaIndividualVulnerability,
 )
+from .assistance_event import (
+    G2PRegisterSchemaAssistanceEvent,
+    G2PRegisterHistorySchemaAssistanceEvent,
+    G2PIntakeFormSchemaAssistanceEvent,
+)

@@ -19,3 +19,11 @@ Status: nothing here has been run yet.
 - Here: housing and vulnerability tables renamed (g2p_*_household_housing, g2p_intake_form_indiv_vulnerability).
   Rule for new registers: len("idx_" + table + "_search_text_trigram") <= 63.
   Not yet run against a database.
+
+## Assistance-event register (added, not yet run)
+- Table g2p_register_assistance_event: child (TABLE) register of Individual, fields = registrant ProGres ID, partner, project, assistance type,
+  cycle, quantity/amount, delivery date, capture channel (ONLINE / OFFLINE_HANDOVER), offline batch, ProGres-authenticated flag.
+- Duplicate-assistance rule = platform register deduplication: dedup_is_enabled=TRUE, threshold 100 (score is 0-100),
+  deduplicate_schema EXACT on registrant_progres_id (0.4) + assistance_type (0.3) + distribution_cycle (0.3).
+- Open questions to verify on the VM: that dedup runs for child-table registers on change request/ingest, and what the API returns for a match.
+- UI labels have no translations yet (screens will show keys).

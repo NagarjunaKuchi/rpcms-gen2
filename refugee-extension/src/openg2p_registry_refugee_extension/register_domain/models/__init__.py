@@ -91,3 +91,8 @@ from .enums import (
     VerificationStatusEnum,
     WaterSourceTypeEnum,
 )
+from .assistance_event import (
+    G2PRegisterAssistanceEvent,
+    G2PRegisterHistoryAssistanceEvent,
+    G2PIntakeFormAssistanceEvent,
+)
