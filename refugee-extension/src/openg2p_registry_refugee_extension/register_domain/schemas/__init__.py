@@ -63,6 +63,9 @@ from .partner import (
     G2PRegisterHistorySchemaPartner,
     G2PIntakeFormSchemaPartner,
 )
+from .project import G2PRegisterSchemaProject, G2PRegisterHistorySchemaProject, G2PIntakeFormSchemaProject
+from .project_mou import G2PRegisterSchemaProjectMou, G2PRegisterHistorySchemaProjectMou, G2PIntakeFormSchemaProjectMou
+from .service_point import G2PRegisterSchemaServicePoint, G2PRegisterHistorySchemaServicePoint, G2PIntakeFormSchemaServicePoint
 from .id_renewal_request import (
     G2PRegisterSchemaIdRenewalRequest,
     G2PRegisterHistorySchemaIdRenewalRequest,

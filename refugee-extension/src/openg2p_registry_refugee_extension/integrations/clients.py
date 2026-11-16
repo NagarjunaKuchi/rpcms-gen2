@@ -53,6 +53,10 @@ class IntegrationConfig:
     sms_base_url: str = ""
     sms_api_key: str = ""
     sms_sender_id: str = ""
+    amp_base_url: str = ""
+    amp_api_key: str = ""
+    ugpass_base_url: str = ""
+    ugpass_api_key: str = ""
 
     @classmethod
     def from_settings(cls, settings) -> "IntegrationConfig":
@@ -68,6 +72,10 @@ class IntegrationConfig:
             sms_base_url=settings.sms_base_url,
             sms_api_key=settings.sms_api_key,
             sms_sender_id=settings.sms_sender_id,
+            amp_base_url=settings.amp_base_url,
+            amp_api_key=settings.amp_api_key,
+            ugpass_base_url=settings.ugpass_base_url,
+            ugpass_api_key=settings.ugpass_api_key,
         )
 
 
@@ -142,6 +150,16 @@ class Integrations:
         """ProGres v4. OK data: {"authenticated": bool}. Sends the ID only: biometric capture is not implemented."""
         return await self._call(self._c.progres_base_url, self._c.progres_api_key, "POST",
                                 "/progres/v4/authenticate", body={"progres_id": progres_id})
+
+    async def lookup_funding(self, amp_record_no: str) -> Response:
+        """AMP. OK data: {"donor", "currency", "commitment", "disbursed_to_partner", "target_households", "household_rate"}"""
+        path = "/amp/v1/records/" + urllib.parse.quote(amp_record_no, safe="")
+        return await self._call(self._c.amp_base_url, self._c.amp_api_key, "GET", path)
+
+    async def verify_document(self, document_id: str) -> Response:
+        """UGPass. OK data: {"valid": bool, "problems": [str], "current_sha256", "signed_sha256", "signatures": int, "eseals": int}"""
+        path = "/ugpass/v1/documents/" + urllib.parse.quote(document_id, safe="") + "/verify"
+        return await self._call(self._c.ugpass_base_url, self._c.ugpass_api_key, "GET", path)
 
     async def send_sms(self, to: str, text: str, ref: str) -> Response:
         """SMS gateway. OK data: {"id": str}"""

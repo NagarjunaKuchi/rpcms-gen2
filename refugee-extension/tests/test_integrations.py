@@ -126,3 +126,18 @@ def test_sms_payload_includes_sender(stub):
     r = run(make(stub).send_sms("+256700000001", "hello", "REQ-1"))
     assert r.ok
     assert stub.seen[0]["body"] == {"to": "+256700000001", "text": "hello", "ref": "REQ-1", "sender_id": "OPM"}
+
+
+def test_funding_lookup_path_is_encoded(stub):
+    stub.answers["/amp/v1/records/AMP-UG-2026-00731"] = [(200, {"commitment": 1})]
+    cfg = IntegrationConfig(timeout=2, retries=0, amp_base_url=stub.url)
+    assert run(Integrations(cfg).lookup_funding("AMP-UG-2026-00731")).ok
+    run(Integrations(cfg).lookup_funding("a/b c"))
+    assert stub.seen[-1]["path"] == "/amp/v1/records/a%2Fb%20c"
+
+
+def test_document_verification_path(stub):
+    stub.answers["/ugpass/v1/documents/DOC-1/verify"] = [(200, {"valid": True, "signatures": 3, "eseals": 2})]
+    cfg = IntegrationConfig(timeout=2, retries=0, ugpass_base_url=stub.url, ugpass_api_key="k")
+    r = run(Integrations(cfg).verify_document("DOC-1"))
+    assert r.ok and r.data["signatures"] == 3 and stub.seen[0]["auth"] == "Bearer k"

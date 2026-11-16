@@ -27,6 +27,9 @@ from .g2p_register_domain_service_individual_vulnerability import (
 from .g2p_register_domain_service_partner import (
     G2PRegisterDomainServicePartner,
 )
+from .g2p_register_domain_service_project import G2PRegisterDomainServiceProject
+from .g2p_register_domain_service_project_mou import G2PRegisterDomainServiceProjectMou
+from .g2p_register_domain_service_service_point import G2PRegisterDomainServiceServicePoint
 from .g2p_register_domain_service_id_renewal_request import (
     G2PRegisterDomainServiceIdRenewalRequest,
 )

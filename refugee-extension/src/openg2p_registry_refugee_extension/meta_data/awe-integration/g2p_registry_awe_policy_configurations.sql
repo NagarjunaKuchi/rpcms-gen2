@@ -13,5 +13,7 @@ INSERT INTO "public"."g2p_registry_awe_policy_configurations" (
     ('a2000000-0000-4000-8000-000000000002', 'REGISTER', 'a0000000-0000-4000-8000-000000000002', '', '', 'registry.change_request', 'registry.change_request.household', 'null'),
     ('a2000000-0000-4000-8000-000000000012', 'INTAKE_FORM', 'a0000000-0000-4000-8000-000000000002', 'c1000000-0000-4000-8000-000000000002', '', 'registry.intake_form', 'registry.intake_form.household', 'null'),
     ('a2000000-0000-4000-8000-000000000003', 'REGISTER', 'a0000000-0000-4000-8000-000000000003', '', '', 'registry.change_request', 'registry.change_request.partner', 'null'),
-    ('a2000000-0000-4000-8000-000000000013', 'INTAKE_FORM', 'a0000000-0000-4000-8000-000000000003', 'c1000000-0000-4000-8000-000000000003', '', 'registry.intake_form', 'registry.intake_form.partner', 'null')
+    ('a2000000-0000-4000-8000-000000000013', 'INTAKE_FORM', 'a0000000-0000-4000-8000-000000000003', 'c1000000-0000-4000-8000-000000000003', '', 'registry.intake_form', 'registry.intake_form.partner', 'null'),
+    ('a2000000-0000-4000-8000-000000000004', 'REGISTER', 'a0000000-0000-4000-8000-000000000004', '', '', 'registry.change_request', 'registry.change_request.project', 'null'),
+    ('a2000000-0000-4000-8000-000000000014', 'INTAKE_FORM', 'a0000000-0000-4000-8000-000000000004', 'c1000000-0000-4000-8000-000000000004', '', 'registry.intake_form', 'registry.intake_form.project', 'null')
 ON CONFLICT ("awe_policy_config_id") DO NOTHING;

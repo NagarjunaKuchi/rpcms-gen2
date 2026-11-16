@@ -16,3 +16,9 @@ INSERT INTO "public"."approval_policy" ("id","policy_key","version","name","desc
     ('a1000000-0000-4000-8000-000000000003', 'registry.change_request.partner', 1, 'Policy for Partner Change Request', NULL, 'active', 'registry.change_request', 'seed', 'FALSE', 'FALSE', NOW(), NOW()),
     ('a1000000-0000-4000-8000-000000000013', 'registry.intake_form.partner', 1, 'Policy for Partner Intake Form', NULL, 'active', 'registry.intake_form', 'seed', 'FALSE', 'FALSE', NOW(), NOW())
 ON CONFLICT DO NOTHING;
+
+-- Project policies (RPCMS).
+INSERT INTO "public"."approval_policy" ("id","policy_key","version","name","description","status","artifact_type","created_by","forbid_self_approval","forbid_repeat_approvers","created_at","updated_at") VALUES
+    ('a1000000-0000-4000-8000-000000000004', 'registry.change_request.project', 1, 'Policy for Project Change Request', NULL, 'active', 'registry.change_request', 'seed', 'FALSE', 'FALSE', NOW(), NOW()),
+    ('a1000000-0000-4000-8000-000000000014', 'registry.intake_form.project', 1, 'Policy for Project Intake Form', NULL, 'active', 'registry.intake_form', 'seed', 'FALSE', 'FALSE', NOW(), NOW())
+ON CONFLICT DO NOTHING;

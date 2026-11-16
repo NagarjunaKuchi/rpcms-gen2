@@ -34,9 +34,16 @@ class Settings(CoreSettings):
     ngo_bureau_api_key: str = ""
     progres_base_url: str = ""  # UNHCR ProGres v4: ID confirmation
     progres_api_key: str = ""
+    amp_base_url: str = ""  # MoFPED Aid Management Platform: funding record lookup
+    amp_api_key: str = ""
+    ugpass_base_url: str = ""  # UGPass / NITA-U: electronic signature verification of MoUs
+    ugpass_api_key: str = ""
     sms_base_url: str = ""  # SMS gateway
     sms_api_key: str = ""
     sms_sender_id: str = ""
 
     # --- business rules ----------------------------------------------------------------------------------
     permit_renewal_alert_days: int = 60  # alert this many days before an NGO permit expires
+    mou_expected_signatures: int = 3  # personal signatures an MoU needs before it counts as fully signed
+    mou_expected_eseals: int = 2  # organisation e-Seals an MoU needs
+    service_point_overlap_radius_m: int = 500  # two partners' service points closer than this are flagged as overlapping

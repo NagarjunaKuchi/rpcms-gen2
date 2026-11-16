@@ -21,3 +21,11 @@ INSERT INTO "public"."approval_stage" ("id","policy_id","stage_order","name","mo
     ('b1000000-0000-4000-8000-000000000131', 'a1000000-0000-4000-8000-000000000013', 1, 'Stage 1 Officers', 'all', NULL, NULL, NULL, 'null', 'block', NULL, 'null', NOW(), NOW()),
     ('b1000000-0000-4000-8000-000000000132', 'a1000000-0000-4000-8000-000000000013', 2, 'Stage 2 Officers', 'all', NULL, NULL, NULL, 'null', 'block', NULL, 'null', NOW(), NOW())
 ON CONFLICT DO NOTHING;
+
+-- Project stages.
+INSERT INTO "public"."approval_stage" ("id","policy_id","stage_order","name","mode","mode_value","sla_hours","parallel_group","skip_if","on_empty","on_breach","escalation_rules_json","created_at","updated_at") VALUES
+    ('b1000000-0000-4000-8000-000000000401', 'a1000000-0000-4000-8000-000000000004', 1, 'Stage 1 Officers', 'all', NULL, NULL, NULL, 'null', 'block', NULL, 'null', NOW(), NOW()),
+    ('b1000000-0000-4000-8000-000000000402', 'a1000000-0000-4000-8000-000000000004', 2, 'Stage 2 Officers', 'all', NULL, NULL, NULL, 'null', 'block', NULL, 'null', NOW(), NOW()),
+    ('b1000000-0000-4000-8000-000000000141', 'a1000000-0000-4000-8000-000000000014', 1, 'Stage 1 Officers', 'all', NULL, NULL, NULL, 'null', 'block', NULL, 'null', NOW(), NOW()),
+    ('b1000000-0000-4000-8000-000000000142', 'a1000000-0000-4000-8000-000000000014', 2, 'Stage 2 Officers', 'all', NULL, NULL, NULL, 'null', 'block', NULL, 'null', NOW(), NOW())
+ON CONFLICT DO NOTHING;
