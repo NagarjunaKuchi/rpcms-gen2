@@ -34,3 +34,9 @@ imports `openg2p_fastapi_common.utils.crypto`, but bundled `openg2p-fastapi-comm
 `openg2p_fastapi_common.crypto`. Verified on the VM with `python -c "import openg2p_fastapi_common.utils.crypto"` on
 both bare base images. Our workaround reinstalls iam-core@8f02f18 (--no-deps) in docker/staff-api/Dockerfile.
 Not yet reported upstream. Unverified: whether other iam-core consumers or the bene/agent portals are affected.
+
+## Finding 3 (upstream, 2026-11-16): celery base image lacks `packaging`
+`celery-worker` (and beat, same image) exit at boot: kombu redis transport -> `ModuleNotFoundError: No module named 'packaging'`.
+Seen on the VM with base `0.0.0-develop.716` + our extension. Not checked whether the bare base image fails too.
+Workaround: `pip install packaging` in docker/celery/Dockerfile. Effect of the missing worker: approved submissions are never
+applied to the register (household search found nothing within 90s). Also added the iam-core pin as a precaution (unverified need).
