@@ -30,9 +30,9 @@ def sms_to(number):
         return json.load(r)["messages"]
 
 
-def register_partner(staff, cfg, name, ursb, permit):
+def register_partner(staff, cfg, name, ursb, permit, district="Yumbe"):
     row = {"organisation_name": name, "partner_code": "T" + uuid.uuid4().hex[:5].upper(), "ursb_registration_no": ursb,
-           "ngo_permit_no": permit, "sector": "Food security", "edit_action": "ADD"}
+           "ngo_permit_no": permit, "sector": "Food security", "operating_district": district, "edit_action": "ADD"}
     body = save_intake_section(staff, submission_id=None, section_id="pt_organisation", section_payload=[row],
                                section_register_id=PARTNER, form_id=PARTNER_FORM, register_id=PARTNER)
     sub = staff.payload(body)["submission_id"]
@@ -112,8 +112,16 @@ def test_partner_in_good_standing_is_compliant(staff, cfg):
     rec = partner_record(staff, register_partner(staff, cfg, "Nile Hope Uganda", "80020003318742", "NGO/PMT/2025/4418"))
     assert rec["compliance_status"] == "COMPLIANT", rec.get("compliance_notes")
     assert rec["ursb_status"] == "ACTIVE" and rec["ngo_permit_status"] == "VALID"
+    assert rec["permit_area_status"] == "COVERED"  # the mock permit covers Yumbe
     assert rec["permit_valid_to"] and rec["permit_renewal_alert_date"]
     assert rec["permit_renewal_alert_date"] < rec["permit_valid_to"]
+
+
+def test_partner_whose_permit_does_not_cover_the_district_is_non_compliant(staff, cfg):
+    rec = partner_record(staff, register_partner(staff, cfg, "Nile Hope Uganda", "80020003318742", "NGO/PMT/2025/4418",
+                                                 district="Kampala"))
+    assert rec["compliance_status"] == "NON_COMPLIANT" and rec["permit_area_status"] == "NOT_COVERED"
+    assert rec["ngo_permit_status"] == "VALID" and "does not cover Kampala" in rec["compliance_notes"]
 
 
 def test_partner_with_unknown_numbers_is_non_compliant(staff, cfg):
