@@ -16,7 +16,8 @@ LOCK = threading.Lock()
 DOCS, SIGREQS, EXPENDITURE, INDICATORS, SMS = {}, {}, [], [], []
 
 URSB = {"80020003318742": {"registration_no": "80020003318742", "name": "Nile Hope Uganda", "type": "NGO (company limited by guarantee)", "status": "ACTIVE"}}
-NGO_BUREAU = {"NGO/PMT/2025/4418": {"permit_no": "NGO/PMT/2025/4418", "holder": "Nile Hope Uganda", "status": "VALID", "valid_to": "2027-12-31", "sectors": ["Food security", "Livelihoods"]}}
+NGO_BUREAU = {"NGO/PMT/2025/4418": {"permit_no": "NGO/PMT/2025/4418", "holder": "Nile Hope Uganda", "status": "VALID", "valid_to": "2027-12-31", "sectors": ["Food security", "Livelihoods"],
+                                    "operating_districts": ["Yumbe", "Terego"]}}
 PROGRES = {"UGA-00423318": {"active": True}, "UGA-00419907": {"active": True}, "UGA-00500001": {"active": False}}
 AMP = {"AMP-UG-2026-00731": {"amp_record": "AMP-UG-2026-00731", "donor": "West Nile Resilience Fund", "currency": "UGX",
                              "commitment": 1200000000, "disbursed_to_partner": 300000000, "target_households": 1800, "household_rate": 150000}}

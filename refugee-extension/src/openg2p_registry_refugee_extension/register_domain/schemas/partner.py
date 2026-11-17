@@ -14,12 +14,14 @@ class G2PSchemaPartner:
     ursb_registration_no: Optional[str] = None
     ngo_permit_no: Optional[str] = None
     proposed_area: Optional[str] = None
+    operating_district: Optional[str] = None
     sector: Optional[str] = None
     country_director: Optional[str] = None
     contact_phone: Optional[str] = None
     ursb_status: Optional[str] = None
     ursb_registered_name: Optional[str] = None
     ngo_permit_status: Optional[str] = None
+    permit_area_status: Optional[str] = None
     permit_valid_to: Optional[date] = None
     permit_renewal_alert_date: Optional[date] = None
     compliance_status: Optional[str] = None
