@@ -34,6 +34,28 @@ def confirmation_fields(response: Response) -> dict:
     return {}
 
 
+REFUSAL_PREFIX = "ProGres did not confirm"
+
+
+def must_be_confirmed(edit_action, id_changed: bool = False) -> bool:
+    """Whether a ProGres "No" refuses this row.
+
+    A new assistance row (the handover itself) always. An edit only when it changes the ProGres ID: correcting the
+    amount or location of a handover already recorded must stay possible after the person's ID has lapsed, but an
+    edit must not be a way to move a row onto an ID ProGres does not confirm."""
+    if edit_action in (None, "ADD"):
+        return True
+    return edit_action == "UPDATE" and bool(id_changed)
+
+
+def refusal(progres_id: str, fields: dict) -> str | None:
+    """The refusal text when ProGres answered No, else None. An empty `fields` (ProGres could not answer) never
+    refuses: "not checked" is not "No"."""
+    if fields.get("progres_authenticated") is False:
+        return f"{REFUSAL_PREFIX} ID {progres_id}: the assistance cannot be recorded"
+    return None
+
+
 def strip_registry_only(row: dict) -> bool:
     """Remove a reference or time supplied by the person or system entering the row. True when something was removed."""
     removed = False

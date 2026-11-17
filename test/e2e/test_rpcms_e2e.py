@@ -137,15 +137,15 @@ def test_assistance_records_progres_confirmation_and_blocks_duplicates(staff, cf
     assert change(staff, cfg, parent, "individual_assistance_tab", "in_table_assistance_events", AE,
                   dict(base, registrant_progres_id=KNOWN_PROGRES_ID), "ADD", KNOWN_PROGRES_ID) == "APPROVED"
     unknown = "UGA-9" + uuid.uuid4().hex[:6]
-    assert change(staff, cfg, parent, "individual_assistance_tab", "in_table_assistance_events", AE,
-                  dict(base, registrant_progres_id=unknown), "ADD", unknown) == "APPROVED"
-    found = wait_for(lambda: len(rows(staff, parent, "individual_assistance_tab", AE)) == 2
-                     and rows(staff, parent, "individual_assistance_tab", AE), what="two assistance rows")
+    refused = change(staff, cfg, parent, "individual_assistance_tab", "in_table_assistance_events", AE,
+                     dict(base, registrant_progres_id=unknown), "ADD", unknown)
+    assert "ProGres did not confirm" in refused  # a ProGres "No" refuses the handover: nothing is recorded
+    found = wait_for(lambda: rows(staff, parent, "individual_assistance_tab", AE), what="the confirmed assistance row")
+    assert len(found) == 1, found
     by_id = {r["registrant_progres_id"]: r for r in found}
     assert by_id[KNOWN_PROGRES_ID]["progres_authenticated"] is True
     assert by_id[KNOWN_PROGRES_ID]["progres_auth_reference"].startswith("PGV4-AUTH-")  # from ProGres (mock), not typed
     assert by_id[KNOWN_PROGRES_ID]["progres_authenticated_at"]
-    assert by_id[unknown]["progres_authenticated"] is False
     dup = change(staff, cfg, parent, "individual_assistance_tab", "in_table_assistance_events", AE,
                  dict(base, registrant_progres_id=KNOWN_PROGRES_ID), "ADD", KNOWN_PROGRES_ID)
     assert "Duplicate assistance" in dup
@@ -514,7 +514,12 @@ def test_field_handovers_sync_once_with_gps_and_the_same_rules(staff, cfg):
         return body if "not registered" not in only.get("reason", "") else None
 
     first = wait_for(registered, what="registrant known by ProGres ID")
-    assert first["results"][0]["status"] in ("SYNCED", "ALREADY_SYNCED"), first
+    # RPCMS knows the person, but ProGres (the mock) does not know this ID yet: the handover is refused, not recorded.
+    assert first["results"][0]["status"] == "NOT_AUTHENTICATED", first
+    assert rows(staff, parent, "individual_assistance_tab", AE) == []
+    mock_post("/progres/v4/_mock/records", {"progres_id": pid, "active": True})
+    status, body = sync_call(staff, batch, [good])  # the same record sent again once ProGres confirms the ID
+    assert status == 200 and body["results"][0]["status"] == "SYNCED", body
 
     bad = [
         dict(base, client_record_id="PH-" + uuid.uuid4().hex[:8], registrant_progres_id="UGA-NOBODY-" + uuid.uuid4().hex[:5]),
@@ -537,7 +542,8 @@ def test_field_handovers_sync_once_with_gps_and_the_same_rules(staff, cfg):
     e = events[0]
     assert e["capture_channel"] == "OFFLINE_HANDOVER" and e["offline_batch_id"] == batch and e["client_record_id"] == good["client_record_id"]
     assert float(e["gps_latitude"]) == 3.4719 and float(e["gps_longitude"]) == 31.3547 and e["officer"] == "Emmanuel Taban"
-    assert e["progres_authenticated"] is False  # set by the registry from ProGres, never taken from the phone
+    assert e["progres_authenticated"] is True  # set by the registry from ProGres, never taken from the phone
+    assert e["progres_auth_reference"].startswith("PGV4-AUTH-")
 
     # The envelope itself is checked.
     assert sync_call(staff, "", [good])[0] == 400

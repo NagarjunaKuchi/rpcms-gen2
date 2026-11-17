@@ -91,6 +91,12 @@ class H(BaseHTTPRequestHandler):
                 ok = bool(rec and rec["active"])  # ID-only confirmation (RPCMS does not capture biometrics)
                 return self._send(200, {"authenticated": ok, "record_active": bool(rec and rec["active"]),
                                         "reference": f"PGV4-AUTH-{datetime.now().strftime('%Y%m%d')}-{secrets.token_hex(3).upper()}", "timestamp": now()})
+            if p == "/progres/v4/_mock/records":  # LOCAL helper, not a ProGres API: make an ID known to this mock
+                pid = str(b.get("progres_id", "")).strip()
+                if not pid:
+                    return self._send(400, {"error": "progres_id required"})
+                PROGRES[pid] = {"active": bool(b.get("active", True))}
+                return self._send(200, {"progres_id": pid, "active": PROGRES[pid]["active"]})
             if p == "/ugpass/v1/documents":
                 text = str(b.get("text", ""))
                 did = "DOC-" + secrets.token_hex(4).upper()
