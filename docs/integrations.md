@@ -9,7 +9,7 @@ Each is configured by environment variables (prefix `REGISTRY_EXTENSIONS_`); an 
 |---|---|---|---|---|
 | URSB | Partner registration check | `URSB_BASE_URL`, `URSB_API_KEY` | `GET /ursb/v1/organisations?registration_no=` | `200 {"name": str, "status": "ACTIVE"...}`, `404` unknown |
 | NGO Bureau | Partner permit check | `NGO_BUREAU_BASE_URL`, `NGO_BUREAU_API_KEY` | `GET /ngobureau/v1/permits?permit_no=` | `200 {"status": "VALID"..., "valid_to": "YYYY-MM-DD"}`, `404` unknown |
-| UNHCR ProGres v4 | Confirm the ProGres ID on an assistance entry | `PROGRES_BASE_URL`, `PROGRES_API_KEY` | `POST /progres/v4/authenticate {"progres_id"}` | `200 {"authenticated": bool}`, `404` unknown |
+| UNHCR ProGres v4 | Confirm the ProGres ID on an assistance entry | `PROGRES_BASE_URL`, `PROGRES_API_KEY` | `POST /progres/v4/authenticate {"progres_id"}` | `200 {"authenticated": bool, "reference": str, "timestamp": str}`, `404` unknown |
 | AMP (MoFPED Aid Management Platform) | Check a project's funding record | `AMP_BASE_URL`, `AMP_API_KEY` | `GET /amp/v1/records/{amp_record_no}` | `200 {"donor", "currency", "commitment", "disbursed_to_partner", ...}`, `404` unknown |
 | UGPass (NITA-U) | Check a signed MoU | `UGPASS_BASE_URL`, `UGPASS_API_KEY` | `GET /ugpass/v1/documents/{document_id}/verify` | `200 {"valid": bool, "problems": [str], "current_sha256", "signatures": int, "eseals": int}`, `404` unknown |
 | SMS gateway | Renewal notifications | `SMS_BASE_URL`, `SMS_API_KEY`, `SMS_SENDER_ID` | `POST /sms/v1/messages {"to","text","ref"[,"sender_id"]}` | `2xx {"id": str}` |
@@ -35,7 +35,7 @@ Every attempt (SENT, FAILED, NOT_CONFIGURED) is logged in `rpcms_report_submissi
 ## Behaviour when a system is not available
 Nothing is invented and nothing blocks the record:
 - Partner: status fields become `NOT_CHECKED` and overall compliance `NOT_CHECKED` (a definite "not found" is `NON_COMPLIANT`).
-- Assistance: the ProGres confirmation column stays empty (a definite "unknown ID" is recorded as No).
+- Assistance: the ProGres confirmation column stays empty (a definite "unknown ID" is recorded as No). When ProGres answers, its transaction `reference` and `timestamp` are stored with the Yes/No (`progres_auth_reference`, `progres_authenticated_at`); nothing else in the answer is read. Both are set only by the registry: a value typed in the UI or sent to the sync API is dropped.
 - Project / MoU: the status becomes `NOT_CHECKED`. Service-point overlap needs no external system.
 - ID renewal: the request records `SMS Status` = `SENT`, `FAILED`, `NO_PHONE` (the person has no phone number) or `NOT_CONFIGURED`.
 

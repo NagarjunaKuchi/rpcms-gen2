@@ -143,6 +143,8 @@ def test_assistance_records_progres_confirmation_and_blocks_duplicates(staff, cf
                      and rows(staff, parent, "individual_assistance_tab", AE), what="two assistance rows")
     by_id = {r["registrant_progres_id"]: r for r in found}
     assert by_id[KNOWN_PROGRES_ID]["progres_authenticated"] is True
+    assert by_id[KNOWN_PROGRES_ID]["progres_auth_reference"].startswith("PGV4-AUTH-")  # from ProGres (mock), not typed
+    assert by_id[KNOWN_PROGRES_ID]["progres_authenticated_at"]
     assert by_id[unknown]["progres_authenticated"] is False
     dup = change(staff, cfg, parent, "individual_assistance_tab", "in_table_assistance_events", AE,
                  dict(base, registrant_progres_id=KNOWN_PROGRES_ID), "ADD", KNOWN_PROGRES_ID)

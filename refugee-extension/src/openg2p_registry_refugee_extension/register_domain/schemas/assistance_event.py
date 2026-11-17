@@ -24,6 +24,8 @@ class G2PSchemaAssistanceEvent:
     capture_channel: Optional[str] = None
     offline_batch_id: Optional[str] = None
     progres_authenticated: Optional[bool] = None
+    progres_auth_reference: Optional[str] = None
+    progres_authenticated_at: Optional[str] = None
     client_record_id: Optional[str] = None
     captured_at: Optional[str] = None
     officer: Optional[str] = None

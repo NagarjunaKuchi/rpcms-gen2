@@ -24,8 +24,10 @@ def test_good_record_becomes_a_row_marked_as_offline_handover():
 
 
 def test_phone_cannot_claim_a_progres_authentication():
-    r, _ = row(progres_authenticated=True, internal_record_id="x", record_status="ACTIVE")
+    r, _ = row(progres_authenticated=True, progres_auth_reference="made-up", progres_authenticated_at="2026-03-05T11:42:00+03:00",
+               internal_record_id="x", record_status="ACTIVE")
     assert "progres_authenticated" not in r and "internal_record_id" not in r and "record_status" not in r
+    assert "progres_auth_reference" not in r and "progres_authenticated_at" not in r
 
 
 @pytest.mark.parametrize("key", h.REQUIRED)
