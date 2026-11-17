@@ -1,5 +1,11 @@
 from openg2p_registry_refugee_extension.integrations import Outcome, Response
-from openg2p_registry_refugee_extension.rules.progres_confirmation import confirmation_fields, strip_registry_only
+from openg2p_registry_refugee_extension.rules.progres_confirmation import (
+    REFUSAL_PREFIX,
+    confirmation_fields,
+    must_be_confirmed,
+    refusal,
+    strip_registry_only,
+)
 
 
 def test_yes_keeps_the_reference_and_time_and_nothing_else():
@@ -42,3 +48,19 @@ def test_a_typed_reference_or_time_is_dropped():
     assert strip_registry_only(row) is True
     assert row == {"registrant_progres_id": "UGA-1"}
     assert strip_registry_only(row) is False
+
+
+def test_a_no_refuses_and_names_the_id_but_not_checked_never_refuses():
+    no = confirmation_fields(Response(Outcome.OK, {"authenticated": False, "reference": "R-1"}))
+    assert refusal("UGA-1", no).startswith(REFUSAL_PREFIX) and "UGA-1" in refusal("UGA-1", no)
+    assert refusal("UGA-1", confirmation_fields(Response(Outcome.NOT_FOUND))).startswith(REFUSAL_PREFIX)
+    assert refusal("UGA-1", confirmation_fields(Response(Outcome.OK, {"authenticated": True}))) is None
+    assert refusal("UGA-1", confirmation_fields(Response(Outcome.UNAVAILABLE))) is None
+    assert refusal("UGA-1", confirmation_fields(Response(Outcome.NOT_CONFIGURED))) is None
+
+
+def test_which_rows_a_no_refuses():
+    assert must_be_confirmed("ADD") and must_be_confirmed(None)
+    assert must_be_confirmed("UPDATE", id_changed=True)
+    assert not must_be_confirmed("UPDATE", id_changed=False)  # correcting a recorded handover stays possible
+    assert not must_be_confirmed("DELETE") and not must_be_confirmed("DELETE", id_changed=True)

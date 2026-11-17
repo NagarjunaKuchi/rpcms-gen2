@@ -2,7 +2,7 @@
 
 Each record is checked, then created and approved through the platform's own change-request path (the same one its
 ingestion worker uses), so the existing rules run unchanged: duplicate refusal (and its count on the dashboard), the
-ProGres confirmation, history and audit. Approval is by the system step, not by the two human approvers: field records
+ProGres confirmation (a "No" refuses the record: NOT_AUTHENTICATED), history and audit. Approval is by the system step, not by the two human approvers: field records
 arrive in hundreds and have already been authenticated at the point of delivery. The signed-in user is kept as the
 creator and approver of every record.
 
@@ -12,6 +12,7 @@ import logging
 from sqlalchemy import func, select
 
 from ..rules import handover_sync as rules
+from ..rules.progres_confirmation import REFUSAL_PREFIX
 
 _logger = logging.getLogger("rpcms-handover-sync")
 
@@ -23,6 +24,7 @@ SOURCE = "AGENT_PORTAL"
 
 # per-record outcomes
 SYNCED, ALREADY, DUPLICATE, REJECTED, RETRY, FAILED = "SYNCED", "ALREADY_SYNCED", "DUPLICATE", "REJECTED", "RETRY_LATER", "FAILED"
+NOT_AUTHENTICATED = "NOT_AUTHENTICATED"  # ProGres answered No for the ID: nothing was recorded
 
 
 class HandoverError(Exception):
@@ -102,6 +104,8 @@ class HandoverSyncService:
             return {"status": RETRY, "reason": "another change to this person's assistance is waiting for approval; send again later"}
         if message.startswith("Duplicate assistance"):
             return {"status": DUPLICATE, "reason": message}
+        if message.startswith(REFUSAL_PREFIX):
+            return {"status": NOT_AUTHENTICATED, "reason": message}
         if getattr(err, "code", None) is not None:  # a rule of the registry refused it
             return {"status": REJECTED, "reason": message}
         _logger.exception("handover approval failed")
