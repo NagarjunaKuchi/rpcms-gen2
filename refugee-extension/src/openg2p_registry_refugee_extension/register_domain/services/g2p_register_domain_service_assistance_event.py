@@ -5,9 +5,10 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from openg2p_registry_core.services import G2PRegisterDomainService
 
-from ...integrations import Outcome, get_integrations
+from ...integrations import get_integrations
 from ...rules.assistance_duplicates import DEDUP_KEYS, first_duplicate_within, key_of
 from ...rules.assistance_duplicates import message as duplicate_message
+from ...rules.progres_confirmation import confirmation_fields, strip_registry_only
 from ...rules.service_point_overlap import valid_coordinates
 from .utils.validations import as_float, parse_date, validation_error
 
@@ -117,21 +118,22 @@ class G2PRegisterDomainServiceAssistanceEvent(G2PRegisterDomainService):
         # Re-checked at approval as a safety net: another request may have been approved since this one was made.
         await self._check_duplicates(list((payload.change_payload if payload else None) or []), session)
 
-        # Confirm the ProGres ID with UNHCR ProGres v4 and record Yes/No on the row. No personal data comes back.
+        # Confirm the ProGres ID with UNHCR ProGres v4 and record Yes/No, the ProGres transaction reference and the
+        # time of the check on the row. No personal data comes back. The reference and time can only come from
+        # ProGres: a value typed in the UI or sent by a caller is dropped first.
         # A "No", or ProGres being unavailable, does not block recording (staff may enter late/offline data):
         # the column stays empty when ProGres could not answer, so "not checked" is never shown as "No".
         rows = list((payload.change_payload if payload else None) or [])
         changed = False
         for row in rows:
+            if strip_registry_only(row):
+                changed = True
             pid = str(row.get("registrant_progres_id") or "").strip()
             if row.get("edit_action") not in (None, "ADD", "UPDATE") or not pid:
                 continue
-            result = await get_integrations().confirm_progres_id(pid)
-            if result.outcome is Outcome.OK:
-                row["progres_authenticated"] = bool(result.data.get("authenticated"))
-                changed = True
-            elif result.outcome is Outcome.NOT_FOUND:
-                row["progres_authenticated"] = False
+            fields = confirmation_fields(await get_integrations().confirm_progres_id(pid))
+            if fields:
+                row.update(fields)
                 changed = True
         if changed:
             payload.change_payload = rows

@@ -31,6 +31,9 @@ class G2PAssistanceEvent:
     capture_channel: Mapped[str] = mapped_column(String, nullable=True)
     offline_batch_id: Mapped[str] = mapped_column(String, nullable=True)
     progres_authenticated: Mapped[bool] = mapped_column(Boolean, nullable=True)
+    # Set by the registry from the ProGres answer, never typed or sent by a phone. Empty when ProGres gave none.
+    progres_auth_reference: Mapped[str] = mapped_column(String, nullable=True, index=True)  # ProGres transaction reference
+    progres_authenticated_at: Mapped[str] = mapped_column(String, nullable=True)  # ISO-8601 time ProGres gave for the check
     # Field capture (handover recorded on a phone, possibly offline, then synced).
     client_record_id: Mapped[str] = mapped_column(String, nullable=True, index=True)  # the phone's own id; makes a retried sync safe
     captured_at: Mapped[str] = mapped_column(String, nullable=True)  # ISO-8601 time on the phone when the handover was recorded
