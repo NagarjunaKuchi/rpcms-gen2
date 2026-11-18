@@ -281,7 +281,7 @@ def signed_mou(signatures, eseals):
 
 
 def test_mou_is_verified_then_flagged_when_altered(staff, cfg):
-    project, _ = register_project(staff, cfg)
+    project, project_row = register_project(staff, cfg)
     tab, sec = "project_mou_tab", "pj_table_mou"
     doc = signed_mou(3, 2)
     ref = "OPM/DoR/NHU/" + uuid.uuid4().hex[:6]
@@ -289,6 +289,13 @@ def test_mou_is_verified_then_flagged_when_altered(staff, cfg):
     row = wait_for(lambda: next((r for r in rows(staff, project, tab, MOU, PROJECT) if r.get("verification_status")), None), what="MoU verification")
     assert row["verification_status"] == "VALID" and row["signatures_count"] == 3 and row["eseals_count"] == 2
     assert row["document_sha256"] and row["verified_on"] and row["mou_status"] == "SIGNED"
+    # the signed MoU locks the budget; other project details stay editable
+    locked = change(staff, cfg, project, "project_info_tab", "pj_project", PROJECT,
+                    dict(internal_record_id=project, project_value=1300000000), "UPDATE", project_row["project_code"], register=PROJECT)
+    assert "Project budget is locked" in locked, locked
+    assert change(staff, cfg, project, "project_info_tab", "pj_project", PROJECT,
+                  dict(internal_record_id=project, project_name="Renamed after signing"), "UPDATE", project_row["project_code"],
+                  register=PROJECT) == "APPROVED"
     # someone edits the signed document: re-checking (an edit of the row) must now report it
     mock_post(f"/ugpass/v1/documents/{doc}/tamper", {"text": "changed amount"})
     assert change(staff, cfg, project, tab, sec, MOU, dict(internal_record_id=row["internal_record_id"], remarks="re-check"), "UPDATE", ref, register=PROJECT) == "APPROVED"
