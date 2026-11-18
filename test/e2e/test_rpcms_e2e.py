@@ -602,3 +602,33 @@ def test_non_compliant_partner_cannot_have_a_project_or_a_handover(staff, cfg):
     status, body = sync_call(staff, "B-" + uuid.uuid4().hex[:6], [handover])
     assert status == 200 and body["results"][0]["status"] == "REJECTED", body
     assert "Partner is not compliant" in body["results"][0]["reason"]
+
+
+def jobs_call(staff):
+    staff._refresh_auth_header()
+    r = staff._client.post("/rpcms-jobs/run")
+    return r.status_code, r.json()
+
+
+def test_daily_check_flags_an_expiring_id_once_and_sends_the_renewal_sms(staff, cfg):
+    phone = "+25670" + str(uuid.uuid4().int)[:7]
+    parent = person(staff, cfg, phone)
+    pid = "UGA-" + str(uuid.uuid4().int)[:8]
+    expiry = (date.today() + timedelta(days=10)).isoformat()
+    assert change(staff, cfg, parent, "individual_info_tab", "in_identifier", REGISTER_INDIVIDUAL,
+                  dict(progres_id=pid, progres_card_expiry=expiry), "UPDATE", pid) == "APPROVED"
+
+    def flagged():
+        status, body = jobs_call(staff)
+        assert status == 200, body
+        found = rows(staff, parent, "individual_id_renewal_tab", IR)
+        return found or None  # the person's ProGres ID is applied by the worker, so the first runs may not see it
+
+    found = wait_for(flagged, timeout=120, every=5, what="ID expiry flagged")
+    assert len(found) == 1 and found[0]["status"] == "EXPIRY_FLAGGED" and found[0]["card_expiry"] == expiry
+    assert found[0]["request_ref"].startswith("AUTO-" + pid)
+    wait_for(lambda: rows(staff, parent, "individual_id_renewal_tab", IR)[0].get("notification_status") == "SENT",
+             what="renewal SMS recorded")
+    assert any("expires on " + expiry in m["text"] for m in sms_to(phone))
+    status, body = jobs_call(staff)  # running it again flags no one twice
+    assert status == 200 and len(rows(staff, parent, "individual_id_renewal_tab", IR)) == 1, body
