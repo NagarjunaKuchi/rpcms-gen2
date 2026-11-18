@@ -63,6 +63,7 @@ class G2PRegisterDomainServiceProjectMou(G2PRegisterDomainService):
                 stored.expected_signatures if stored.expected_signatures is not None else settings.mou_expected_signatures,
                 stored.expected_eseals if stored.expected_eseals is not None else settings.mou_expected_eseals,
                 datetime.now(timezone.utc).date(),
+                previous_status=stored.mou_status,
             )
             for field, value in result.items():
                 setattr(stored, field, value)
