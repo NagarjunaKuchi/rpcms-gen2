@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from openg2p_registry_core.services import G2PRegisterDomainService
 
 from ...integrations import get_integrations
+from ...rules import budget_lock
 from ...rules.partner_gate import refusal
 from ...rules.project_funding import evaluate_funding
 from .utils.partner_standing import partner_standing
@@ -40,6 +41,7 @@ class G2PRegisterDomainServiceProject(G2PRegisterDomainService):
             if start and end and end < start:
                 validation_error("end_date must not be before start_date")
         await self._check_partner_standing(records)
+        await self._check_budget_lock(records)
 
     async def _check_partner_standing(self, records: list[dict]) -> None:
         """A project is recorded only for a partner that has not failed its compliance check. Runs when the form or
@@ -58,6 +60,35 @@ class G2PRegisterDomainServiceProject(G2PRegisterDomainService):
                 if problem:
                     _logger.warning("project refused: partner %s is not compliant", code)
                     validation_error(problem)
+
+    async def _check_budget_lock(self, records: list[dict]) -> None:
+        """Once the project's MoU is signed, its budget cannot be changed (an edit that names a budget figure with a
+        different value is refused). A new project has no MoU yet, so it is never locked."""
+        from openg2p_fastapi_common.context import get_async_session_maker
+        from sqlalchemy import select
+
+        from ..models import G2PRegisterProject as Project, G2PRegisterProjectMou as Mou
+
+        edits = [r for r in records if r.get("edit_action") == "UPDATE" and r.get("internal_record_id")
+                 and any(f in r for f in budget_lock.LOCKED_FIELDS)]
+        if not edits:
+            return
+        async with get_async_session_maker()() as session:
+            for record in edits:
+                project = (await session.execute(select(Project).where(
+                    Project.internal_record_id == record["internal_record_id"]))).scalar()
+                if project is None:
+                    continue
+                stored = {f: getattr(project, f, None) for f in budget_lock.LOCKED_FIELDS}
+                fields = budget_lock.changed_budget_fields(stored, record)
+                if not fields:
+                    continue
+                signed = (await session.execute(select(Mou.internal_record_id).where(
+                    Mou.link_internal_record_id == project.internal_record_id, Mou.record_status == "ACTIVE",
+                    Mou.mou_status == budget_lock.SIGNED).limit(1))).scalar()
+                if signed:
+                    _logger.warning("budget change refused: project %s has a signed MoU", project.project_code)
+                    validation_error(budget_lock.refusal(project.project_code, fields))
 
     async def post_ingest(self, register_id: str, register_row, session: AsyncSession):
         """After an approved registration: ask AMP for the funding record and store the comparison on the project."""
