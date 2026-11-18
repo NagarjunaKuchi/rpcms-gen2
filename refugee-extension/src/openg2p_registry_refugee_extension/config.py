@@ -50,6 +50,7 @@ class Settings(CoreSettings):
 
     # --- business rules ----------------------------------------------------------------------------------
     permit_renewal_alert_days: int = 60  # alert this many days before an NGO permit expires
+    id_expiry_alert_days: int = 60  # flag a refugee ID and send the renewal SMS this many days before the card expires
     mou_expected_signatures: int = 3  # personal signatures an MoU needs before it counts as fully signed
     mou_expected_eseals: int = 2  # organisation e-Seals an MoU needs
     service_point_overlap_radius_m: int = 500  # two partners' service points closer than this are flagged as overlapping

@@ -34,6 +34,8 @@ class G2PPartner:
     compliance_status: Mapped[str] = mapped_column(String, nullable=True, index=True)
     compliance_checked_on: Mapped[date] = mapped_column(Date, nullable=True)
     compliance_notes: Mapped[str] = mapped_column(String, nullable=True)
+    permit_alert_sent_on: Mapped[date] = mapped_column(Date, nullable=True)  # set by the daily check when the SMS went out
+    permit_alert_status: Mapped[str] = mapped_column(String, nullable=True)  # SENT / FAILED / NO_PHONE / NOT_CONFIGURED
 
 
 # Short table names: registry-core adds idx_<table>_search_text_trigram (Postgres limit 63 chars).

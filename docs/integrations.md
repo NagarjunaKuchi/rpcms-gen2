@@ -50,3 +50,10 @@ a biometric; if the real service requires one, that needs a capture step in the 
 ## Local development
 `deploy/docker-compose.yaml` points all four at the `mocks` service (`mocks/server.py`). Every mock response says
 `"mock": true`; no message is sent to any phone. Mock data is in `mocks/server.py`.
+
+## Daily checks (`POST /rpcms-jobs/run`)
+Two checks run together, on staff-API permission `rpcmsJobs:run`; running them twice in a day is safe.
+- **Partner permit alert:** from the partner's `permit_renewal_alert_date` (60 days before expiry by default) until the permit expires, an SMS goes to the partner's `contact_phone`, once per permit. The result is stored on the partner as `permit_alert_status` (`SENT`, `FAILED`, `NO_PHONE`, `NOT_CONFIGURED`); `permit_alert_sent_on` is set only on `SENT`, so anything else is tried again on the next run.
+- **ID expiry:** a refugee whose `progres_card_expiry` falls within `REGISTRY_EXTENSIONS_ID_EXPIRY_ALERT_DAYS` days (default 60, our choice: the document gives no number) gets an ID renewal request with status `EXPIRY_FLAGGED`, created and approved by the system step (`rpcms-scheduler`), so the existing renewal SMS and its `SENT / FAILED / NO_PHONE` record apply. The request reference is `AUTO-<ProGres ID>-<expiry date>`, so a person is flagged once per card expiry. Cards that expired earlier are not picked up.
+- **Nothing calls the endpoint by itself yet.** A daily trigger (a scheduled caller with a service login) is still to be set up; until then staff or a script call it.
+

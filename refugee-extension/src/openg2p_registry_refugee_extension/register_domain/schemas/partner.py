@@ -27,6 +27,8 @@ class G2PSchemaPartner:
     compliance_status: Optional[str] = None
     compliance_checked_on: Optional[date] = None
     compliance_notes: Optional[str] = None
+    permit_alert_sent_on: Optional[date] = None
+    permit_alert_status: Optional[str] = None
 
 
 class G2PRegisterSchemaPartner(G2PRegisterBaseSchema, G2PSchemaPartner):
