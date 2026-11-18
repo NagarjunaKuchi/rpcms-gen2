@@ -16,7 +16,8 @@ LOCK = threading.Lock()
 DOCS, SIGREQS, EXPENDITURE, INDICATORS, SMS = {}, {}, [], [], []
 
 URSB = {"80020003318742": {"registration_no": "80020003318742", "name": "Nile Hope Uganda", "type": "NGO (company limited by guarantee)", "status": "ACTIVE"}}
-NGO_BUREAU = {"NGO/PMT/2025/4418": {"permit_no": "NGO/PMT/2025/4418", "holder": "Nile Hope Uganda", "status": "VALID", "valid_to": "2027-12-31", "sectors": ["Food security", "Livelihoods"]}}
+NGO_BUREAU = {"NGO/PMT/2025/4418": {"permit_no": "NGO/PMT/2025/4418", "holder": "Nile Hope Uganda", "status": "VALID", "valid_to": "2027-12-31", "sectors": ["Food security", "Livelihoods"],
+                                    "operating_districts": ["Yumbe", "Terego"]}}
 PROGRES = {"UGA-00423318": {"active": True}, "UGA-00419907": {"active": True}, "UGA-00500001": {"active": False}}
 AMP = {"AMP-UG-2026-00731": {"amp_record": "AMP-UG-2026-00731", "donor": "West Nile Resilience Fund", "currency": "UGX",
                              "commitment": 1200000000, "disbursed_to_partner": 300000000, "target_households": 1800, "household_rate": 150000}}
@@ -91,6 +92,12 @@ class H(BaseHTTPRequestHandler):
                 ok = bool(rec and rec["active"])  # ID-only confirmation (RPCMS does not capture biometrics)
                 return self._send(200, {"authenticated": ok, "record_active": bool(rec and rec["active"]),
                                         "reference": f"PGV4-AUTH-{datetime.now().strftime('%Y%m%d')}-{secrets.token_hex(3).upper()}", "timestamp": now()})
+            if p == "/progres/v4/_mock/records":  # LOCAL helper, not a ProGres API: make an ID known to this mock
+                pid = str(b.get("progres_id", "")).strip()
+                if not pid:
+                    return self._send(400, {"error": "progres_id required"})
+                PROGRES[pid] = {"active": bool(b.get("active", True))}
+                return self._send(200, {"progres_id": pid, "active": PROGRES[pid]["active"]})
             if p == "/ugpass/v1/documents":
                 text = str(b.get("text", ""))
                 did = "DOC-" + secrets.token_hex(4).upper()

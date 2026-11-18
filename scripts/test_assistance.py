@@ -41,8 +41,10 @@ def add_event(staff, subject_id, event):
     return body, (pl.get("change_request_id") if isinstance(pl, dict) else None)
 
 cfg = Config.from_env()
-event = dict(registrant_progres_id="PRG-T-" + uuid.uuid4().hex[:8], partner_code="WFP", partner_name="World Food Programme",
-             assistance_type="FOOD", distribution_cycle="2026-11", quantity=25, unit="kg",
+# The ID must be one the mock ProGres confirms: a ProGres "No" now refuses the entry. The cycle is unique per run so a
+# second run on the same stack is not a duplicate of the first.
+event = dict(registrant_progres_id="UGA-00423318", partner_code="WFP", partner_name="World Food Programme",
+             assistance_type="FOOD", distribution_cycle="SMOKE-" + uuid.uuid4().hex[:8], quantity=25, unit="kg",
              delivery_date="2026-11-10", capture_channel="ONLINE")
 with StaffClient.login(cfg) as staff:
     say("provision household"); hh = provision_household(staff, cfg, step=say)

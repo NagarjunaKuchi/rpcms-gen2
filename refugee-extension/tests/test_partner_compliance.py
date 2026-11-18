@@ -5,14 +5,14 @@ from openg2p_registry_refugee_extension.rules.partner_compliance import evaluate
 
 TODAY = date(2026, 11, 16)
 GOOD_URSB = Response(Outcome.OK, {"name": "Nile Hope Uganda", "status": "ACTIVE"})
-GOOD_PERMIT = Response(Outcome.OK, {"status": "VALID", "valid_to": "2027-12-31"})
+GOOD_PERMIT = Response(Outcome.OK, {"status": "VALID", "valid_to": "2027-12-31", "operating_districts": ["Yumbe", "Terego"]})
 NOT_FOUND = Response(Outcome.NOT_FOUND)
 DOWN = Response(Outcome.UNAVAILABLE, detail="timeout")
 OFF = Response(Outcome.NOT_CONFIGURED)
 
 
-def ev(ursb=GOOD_URSB, permit=GOOD_PERMIT, name="Nile Hope Uganda", days=60):
-    return evaluate_partner(name, ursb, permit, TODAY, days)
+def ev(ursb=GOOD_URSB, permit=GOOD_PERMIT, name="Nile Hope Uganda", days=60, district="Yumbe"):
+    return evaluate_partner(name, ursb, permit, TODAY, days, operating_district=district)
 
 
 def test_compliant_and_alert_date():
@@ -47,7 +47,7 @@ def test_expired_permit_is_non_compliant():
 
 
 def test_permit_expiring_today_is_still_valid():
-    r = ev(permit=Response(Outcome.OK, {"status": "VALID", "valid_to": "2026-11-16"}))
+    r = ev(permit=Response(Outcome.OK, {"status": "VALID", "valid_to": "2026-11-16", "operating_districts": ["Yumbe"]}))
     assert r["compliance_status"] == "COMPLIANT"
 
 
@@ -76,3 +76,46 @@ def test_permit_without_usable_date_is_not_checked():
     for bad in ({"status": "VALID"}, {"status": "VALID", "valid_to": "soon"}):
         r = ev(permit=Response(Outcome.OK, bad))
         assert r["compliance_status"] == "NOT_CHECKED" and "permit_valid_to" not in r
+
+
+# ---- operating area ------------------------------------------------------------------------------------------
+
+def test_permit_covering_the_district_is_compliant_whatever_the_spelling():
+    for district in ("Yumbe", " yumbe ", "YUMBE District", "Terego"):
+        r = ev(district=district)
+        assert r["permit_area_status"] == "COVERED" and r["compliance_status"] == "COMPLIANT", district
+
+
+def test_permit_not_covering_the_district_is_non_compliant():
+    r = ev(district="Kampala")
+    assert r["permit_area_status"] == "NOT_COVERED" and r["compliance_status"] == "NON_COMPLIANT"
+    assert "does not cover Kampala" in r["compliance_notes"]
+    assert r["ngo_permit_status"] == "VALID"  # the permit itself is fine; only the area fails
+
+
+def test_no_district_entered_concludes_nothing():
+    for district in (None, "", "   "):
+        r = ev(district=district)
+        assert r["permit_area_status"] == "NOT_CHECKED" and r["compliance_status"] == "NOT_CHECKED"
+        assert "Operating district not entered" in r["compliance_notes"]
+
+
+def test_bureau_answer_without_districts_concludes_nothing():
+    for districts in ({}, {"operating_districts": []}, {"operating_districts": "Yumbe"}, {"operating_districts": [None, 7, " "]}):
+        r = ev(permit=Response(Outcome.OK, {"status": "VALID", "valid_to": "2027-12-31", **districts}))
+        assert r["permit_area_status"] == "NOT_CHECKED" and r["compliance_status"] == "NOT_CHECKED", districts
+        assert "did not list" in r["compliance_notes"]
+
+
+def test_a_failed_permit_stays_non_compliant_even_when_the_area_cannot_be_compared():
+    expired = Response(Outcome.OK, {"status": "VALID", "valid_to": "2026-01-31"})
+    r = ev(permit=expired, district=None)
+    assert r["compliance_status"] == "NON_COMPLIANT" and r["ngo_permit_status"] == "EXPIRED"
+    assert r["permit_area_status"] == "NOT_CHECKED"
+
+
+def test_area_is_not_checked_when_the_permit_is_unknown_or_the_bureau_is_down():
+    assert ev(permit=NOT_FOUND)["permit_area_status"] == "NOT_CHECKED"
+    assert ev(permit=NOT_FOUND)["compliance_status"] == "NON_COMPLIANT"
+    assert ev(permit=DOWN)["permit_area_status"] == "NOT_CHECKED"
+    assert ev(permit=DOWN)["compliance_status"] == "NOT_CHECKED"

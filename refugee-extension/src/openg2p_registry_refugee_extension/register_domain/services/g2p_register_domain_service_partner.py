@@ -23,7 +23,7 @@ class G2PRegisterDomainServicePartner(G2PRegisterDomainService):
 
     async def post_ingest(self, register_id: str, register_row, session: AsyncSession):
         """Runs in the Celery worker right after an approved registration creates the partner row: verify the
-        organisation with URSB and the NGO Bureau and record the result (rules/partner_compliance.py).
+        organisation with URSB and the NGO Bureau (permit valid and covering the operating district) and record the result (rules/partner_compliance.py).
 
         A system that is not configured or not reachable leaves compliance NOT_CHECKED; it never fails the
         registration and never guesses.
@@ -39,13 +39,14 @@ class G2PRegisterDomainServicePartner(G2PRegisterDomainService):
             permit,
             datetime.now(timezone.utc).date(),
             Settings.get_config().permit_renewal_alert_days,
+            operating_district=register_row.operating_district,
         )
         for field, value in result.items():
             setattr(register_row, field, value)
         await session.flush()
 
     def construct_search_text(self, payload: dict, extra: list[str] = None) -> str:
-        keys = ["organisation_name", "partner_code", "ursb_registration_no", "ngo_permit_no", "proposed_area", "sector", "country_director"]
+        keys = ["organisation_name", "partner_code", "ursb_registration_no", "ngo_permit_no", "proposed_area", "operating_district", "sector", "country_director"]
         parts = [str(v).strip() for v in (extra or []) if str(v).strip()]
         parts += [str(payload.get(k) or "").strip() for k in keys if str(payload.get(k) or "").strip()]
         return " ".join(parts).strip()

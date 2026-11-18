@@ -20,6 +20,7 @@ class G2PPartner:
     ursb_registration_no: Mapped[str] = mapped_column(String, nullable=True, index=True)
     ngo_permit_no: Mapped[str] = mapped_column(String, nullable=True, index=True)
     proposed_area: Mapped[str] = mapped_column(String, nullable=True)
+    operating_district: Mapped[str] = mapped_column(String, nullable=True, index=True)  # compared with the NGO permit's districts
     sector: Mapped[str] = mapped_column(String, nullable=True)
     country_director: Mapped[str] = mapped_column(String, nullable=True)
     contact_phone: Mapped[str] = mapped_column(String, nullable=True)
@@ -27,6 +28,7 @@ class G2PPartner:
     ursb_status: Mapped[str] = mapped_column(String, nullable=True)
     ursb_registered_name: Mapped[str] = mapped_column(String, nullable=True)
     ngo_permit_status: Mapped[str] = mapped_column(String, nullable=True)
+    permit_area_status: Mapped[str] = mapped_column(String, nullable=True)  # COVERED / NOT_COVERED / NOT_CHECKED, set by the registry
     permit_valid_to: Mapped[date] = mapped_column(Date, nullable=True)
     permit_renewal_alert_date: Mapped[date] = mapped_column(Date, nullable=True)
     compliance_status: Mapped[str] = mapped_column(String, nullable=True, index=True)

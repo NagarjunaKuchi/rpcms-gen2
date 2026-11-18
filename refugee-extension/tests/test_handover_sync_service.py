@@ -19,6 +19,8 @@ def test_outcomes_are_told_apart():
     assert classify(Refused("Duplicate assistance: registrant X already received FOOD"))["status"] == "DUPLICATE"
     assert classify(Refused("A pending change request already exists for this record and section"))["status"] == "RETRY_LATER"
     assert classify(Refused("gps_latitude must be real"))["status"] == "REJECTED"
+    no = classify(Refused("ProGres did not confirm ID UGA-1: the assistance cannot be recorded"))
+    assert no["status"] == "NOT_AUTHENTICATED" and "UGA-1" in no["reason"]
     assert classify(RuntimeError("boom"))["status"] == "FAILED"
     assert "boom" not in classify(RuntimeError("boom"))["reason"]  # internals are not leaked to the phone
 

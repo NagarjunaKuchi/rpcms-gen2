@@ -8,8 +8,10 @@ from openg2p_registry_core.services import G2PRegisterDomainService
 from ...integrations import get_integrations
 from ...rules.assistance_duplicates import DEDUP_KEYS, first_duplicate_within, key_of
 from ...rules.assistance_duplicates import message as duplicate_message
-from ...rules.progres_confirmation import confirmation_fields, strip_registry_only
+from ...rules.partner_gate import refusal as refusal_partner
+from ...rules.progres_confirmation import confirmation_fields, must_be_confirmed, refusal, strip_registry_only
 from ...rules.service_point_overlap import valid_coordinates
+from .utils.partner_standing import partner_standing
 from .utils.validations import as_float, parse_date, validation_error
 
 _logger = logging.getLogger("g2p-register-assistanceevent-service")
@@ -121,9 +123,20 @@ class G2PRegisterDomainServiceAssistanceEvent(G2PRegisterDomainService):
         # Confirm the ProGres ID with UNHCR ProGres v4 and record Yes/No, the ProGres transaction reference and the
         # time of the check on the row. No personal data comes back. The reference and time can only come from
         # ProGres: a value typed in the UI or sent by a caller is dropped first.
-        # A "No", or ProGres being unavailable, does not block recording (staff may enter late/offline data):
-        # the column stays empty when ProGres could not answer, so "not checked" is never shown as "No".
+        # A "No" refuses a new row, and an edit that changes the ProGres ID: assistance is recorded only for an ID
+        # ProGres confirms. Any other edit of an existing row is not refused; the answer is just recorded.
+        # ProGres being unavailable does not block recording: the column stays empty, so "not checked" is never
+        # shown as "No". (Whether an outage should block is an open question for OPM/UNHCR.)
         rows = list((payload.change_payload if payload else None) or [])
+        # Assistance is recorded only for a partner that has not failed its compliance check (new rows only).
+        for row in rows:
+            code = str(row.get("partner_code") or "").strip()
+            if row.get("edit_action") in (None, "ADD") and code:
+                standing = await partner_standing(session, code)
+                problem = standing and refusal_partner(code, standing[0], standing[1], "assistance")
+                if problem:
+                    _logger.warning("assistance refused: partner %s is not compliant", code)
+                    validation_error(problem)
         changed = False
         for row in rows:
             if strip_registry_only(row):
@@ -132,12 +145,33 @@ class G2PRegisterDomainServiceAssistanceEvent(G2PRegisterDomainService):
             if row.get("edit_action") not in (None, "ADD", "UPDATE") or not pid:
                 continue
             fields = confirmation_fields(await get_integrations().confirm_progres_id(pid))
+            if must_be_confirmed(row.get("edit_action"), await self._progres_id_changes(row, pid, session)):
+                problem = refusal(pid, fields)
+                if problem:
+                    _logger.warning("assistance refused: ProGres answered No (partner %s, channel %s)",
+                                    row.get("partner_code"), row.get("capture_channel"))
+                    validation_error(problem)
             if fields:
                 row.update(fields)
                 changed = True
         if changed:
             payload.change_payload = rows
             flag_modified(payload, "change_payload")
+
+    @staticmethod
+    async def _progres_id_changes(row: dict, new_id: str, session) -> bool:
+        """For an UPDATE: whether the row's ProGres ID differs from the stored one. A row that cannot be found counts
+        as changed, so the stricter rule applies."""
+        if row.get("edit_action") != "UPDATE":
+            return False
+        from ..models import G2PRegisterAssistanceEvent as Event
+
+        own_id = row.get("internal_record_id")
+        if not own_id:
+            return True
+        stored = (await session.execute(
+            select(Event.registrant_progres_id).where(Event.internal_record_id == own_id).limit(1))).first()
+        return stored is None or str(stored[0] or "").strip() != new_id
 
     def construct_search_text(self, payload: dict, extra: list[str] = None) -> str:
         keys = ["registrant_progres_id", "partner_code", "partner_name", "assistance_type", "distribution_cycle", "project_ref"]

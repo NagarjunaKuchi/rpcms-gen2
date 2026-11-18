@@ -30,9 +30,9 @@ def sms_to(number):
         return json.load(r)["messages"]
 
 
-def register_partner(staff, cfg, name, ursb, permit):
+def register_partner(staff, cfg, name, ursb, permit, district="Yumbe"):
     row = {"organisation_name": name, "partner_code": "T" + uuid.uuid4().hex[:5].upper(), "ursb_registration_no": ursb,
-           "ngo_permit_no": permit, "sector": "Food security", "edit_action": "ADD"}
+           "ngo_permit_no": permit, "sector": "Food security", "operating_district": district, "edit_action": "ADD"}
     body = save_intake_section(staff, submission_id=None, section_id="pt_organisation", section_payload=[row],
                                section_register_id=PARTNER, form_id=PARTNER_FORM, register_id=PARTNER)
     sub = staff.payload(body)["submission_id"]
@@ -112,8 +112,16 @@ def test_partner_in_good_standing_is_compliant(staff, cfg):
     rec = partner_record(staff, register_partner(staff, cfg, "Nile Hope Uganda", "80020003318742", "NGO/PMT/2025/4418"))
     assert rec["compliance_status"] == "COMPLIANT", rec.get("compliance_notes")
     assert rec["ursb_status"] == "ACTIVE" and rec["ngo_permit_status"] == "VALID"
+    assert rec["permit_area_status"] == "COVERED"  # the mock permit covers Yumbe
     assert rec["permit_valid_to"] and rec["permit_renewal_alert_date"]
     assert rec["permit_renewal_alert_date"] < rec["permit_valid_to"]
+
+
+def test_partner_whose_permit_does_not_cover_the_district_is_non_compliant(staff, cfg):
+    rec = partner_record(staff, register_partner(staff, cfg, "Nile Hope Uganda", "80020003318742", "NGO/PMT/2025/4418",
+                                                 district="Kampala"))
+    assert rec["compliance_status"] == "NON_COMPLIANT" and rec["permit_area_status"] == "NOT_COVERED"
+    assert rec["ngo_permit_status"] == "VALID" and "does not cover Kampala" in rec["compliance_notes"]
 
 
 def test_partner_with_unknown_numbers_is_non_compliant(staff, cfg):
@@ -137,15 +145,15 @@ def test_assistance_records_progres_confirmation_and_blocks_duplicates(staff, cf
     assert change(staff, cfg, parent, "individual_assistance_tab", "in_table_assistance_events", AE,
                   dict(base, registrant_progres_id=KNOWN_PROGRES_ID), "ADD", KNOWN_PROGRES_ID) == "APPROVED"
     unknown = "UGA-9" + uuid.uuid4().hex[:6]
-    assert change(staff, cfg, parent, "individual_assistance_tab", "in_table_assistance_events", AE,
-                  dict(base, registrant_progres_id=unknown), "ADD", unknown) == "APPROVED"
-    found = wait_for(lambda: len(rows(staff, parent, "individual_assistance_tab", AE)) == 2
-                     and rows(staff, parent, "individual_assistance_tab", AE), what="two assistance rows")
+    refused = change(staff, cfg, parent, "individual_assistance_tab", "in_table_assistance_events", AE,
+                     dict(base, registrant_progres_id=unknown), "ADD", unknown)
+    assert "ProGres did not confirm" in refused  # a ProGres "No" refuses the handover: nothing is recorded
+    found = wait_for(lambda: rows(staff, parent, "individual_assistance_tab", AE), what="the confirmed assistance row")
+    assert len(found) == 1, found
     by_id = {r["registrant_progres_id"]: r for r in found}
     assert by_id[KNOWN_PROGRES_ID]["progres_authenticated"] is True
     assert by_id[KNOWN_PROGRES_ID]["progres_auth_reference"].startswith("PGV4-AUTH-")  # from ProGres (mock), not typed
     assert by_id[KNOWN_PROGRES_ID]["progres_authenticated_at"]
-    assert by_id[unknown]["progres_authenticated"] is False
     dup = change(staff, cfg, parent, "individual_assistance_tab", "in_table_assistance_events", AE,
                  dict(base, registrant_progres_id=KNOWN_PROGRES_ID), "ADD", KNOWN_PROGRES_ID)
     assert "Duplicate assistance" in dup
@@ -514,7 +522,12 @@ def test_field_handovers_sync_once_with_gps_and_the_same_rules(staff, cfg):
         return body if "not registered" not in only.get("reason", "") else None
 
     first = wait_for(registered, what="registrant known by ProGres ID")
-    assert first["results"][0]["status"] in ("SYNCED", "ALREADY_SYNCED"), first
+    # RPCMS knows the person, but ProGres (the mock) does not know this ID yet: the handover is refused, not recorded.
+    assert first["results"][0]["status"] == "NOT_AUTHENTICATED", first
+    assert rows(staff, parent, "individual_assistance_tab", AE) == []
+    mock_post("/progres/v4/_mock/records", {"progres_id": pid, "active": True})
+    status, body = sync_call(staff, batch, [good])  # the same record sent again once ProGres confirms the ID
+    assert status == 200 and body["results"][0]["status"] == "SYNCED", body
 
     bad = [
         dict(base, client_record_id="PH-" + uuid.uuid4().hex[:8], registrant_progres_id="UGA-NOBODY-" + uuid.uuid4().hex[:5]),
@@ -537,7 +550,8 @@ def test_field_handovers_sync_once_with_gps_and_the_same_rules(staff, cfg):
     e = events[0]
     assert e["capture_channel"] == "OFFLINE_HANDOVER" and e["offline_batch_id"] == batch and e["client_record_id"] == good["client_record_id"]
     assert float(e["gps_latitude"]) == 3.4719 and float(e["gps_longitude"]) == 31.3547 and e["officer"] == "Emmanuel Taban"
-    assert e["progres_authenticated"] is False  # set by the registry from ProGres, never taken from the phone
+    assert e["progres_authenticated"] is True  # set by the registry from ProGres, never taken from the phone
+    assert e["progres_auth_reference"].startswith("PGV4-AUTH-")
 
     # The envelope itself is checked.
     assert sync_call(staff, "", [good])[0] == 400
@@ -571,3 +585,20 @@ def test_dashboard_charts_show_the_registered_data():
         # The dashboard's database role sees the reporting views and nothing else.
         dash = c.get("/api/v1/dashboard/rpcms-national", headers=h)
         assert dash.status_code == 200 and dash.json()["result"]["published"] is True
+
+
+def test_non_compliant_partner_cannot_have_a_project_or_a_handover(staff, cfg):
+    code = register_partner(staff, cfg, "Unregistered Relief Org", "11111111111111", "NGO/PMT/0000/0000")
+    assert partner_record(staff, code)["compliance_status"] == "NON_COMPLIANT"
+    with pytest.raises(StaffApiError) as refused:  # refused when the project form is saved
+        register_project(staff, cfg, partner_code=code)
+    assert "Partner is not compliant" in str(refused.value)
+
+    handover = dict(client_record_id="PH-" + uuid.uuid4().hex[:8], registrant_progres_id="UGA-" + str(uuid.uuid4().int)[:8],
+                    partner_code=code, assistance_type="CASH_FOR_FOOD", distribution_cycle="C-" + uuid.uuid4().hex[:6],
+                    delivery_date=date.today().isoformat(), amount=150000, currency="UGX", delivery_location="Zone 3, Point A",
+                    officer="Emmanuel Taban", captured_at=date.today().isoformat() + "T08:42:00+00:00",
+                    gps_latitude=3.4719, gps_longitude=31.3547, gps_accuracy_m=8)
+    status, body = sync_call(staff, "B-" + uuid.uuid4().hex[:6], [handover])
+    assert status == 200 and body["results"][0]["status"] == "REJECTED", body
+    assert "Partner is not compliant" in body["results"][0]["reason"]

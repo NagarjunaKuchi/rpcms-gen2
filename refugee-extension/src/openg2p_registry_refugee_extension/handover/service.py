@@ -2,16 +2,18 @@
 
 Each record is checked, then created and approved through the platform's own change-request path (the same one its
 ingestion worker uses), so the existing rules run unchanged: duplicate refusal (and its count on the dashboard), the
-ProGres confirmation, history and audit. Approval is by the system step, not by the two human approvers: field records
+ProGres confirmation (a "No" refuses the record: NOT_AUTHENTICATED), history and audit. Approval is by the system step, not by the two human approvers: field records
 arrive in hundreds and have already been authenticated at the point of delivery. The signed-in user is kept as the
 creator and approver of every record.
 
 One record per transaction: a bad record never blocks the others, and a failure leaves no half-created request."""
 import logging
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 
 from ..rules import handover_sync as rules
+from ..rules.partner_gate import refusal as partner_refusal
+from ..rules.progres_confirmation import REFUSAL_PREFIX
 
 _logger = logging.getLogger("rpcms-handover-sync")
 
@@ -23,6 +25,7 @@ SOURCE = "AGENT_PORTAL"
 
 # per-record outcomes
 SYNCED, ALREADY, DUPLICATE, REJECTED, RETRY, FAILED = "SYNCED", "ALREADY_SYNCED", "DUPLICATE", "REJECTED", "RETRY_LATER", "FAILED"
+NOT_AUTHENTICATED = "NOT_AUTHENTICATED"  # ProGres answered No for the ID: nothing was recorded
 
 
 class HandoverError(Exception):
@@ -63,8 +66,12 @@ class HandoverSyncService:
                 existing = await self._existing(session, ref)
                 if existing:
                     return {**out, "status": ALREADY, "record_id": existing}
-                if not await self._partner_active(session, row["partner_code"]):
+                standing = await self._partner_standing(session, row["partner_code"])
+                if standing is None:
                     return {**out, "status": REJECTED, "reason": f"partner {row['partner_code']} is not an active partner in RPCMS"}
+                problem = partner_refusal(row["partner_code"], standing[0], standing[1], "assistance")
+                if problem:  # checked before anything is created; the approval step checks it again
+                    return {**out, "status": REJECTED, "reason": problem}
                 individuals = await self._individuals(session, row["registrant_progres_id"])
                 if len(individuals) != 1:
                     why = "is not registered in RPCMS" if not individuals else "matches more than one registrant in RPCMS"
@@ -102,6 +109,8 @@ class HandoverSyncService:
             return {"status": RETRY, "reason": "another change to this person's assistance is waiting for approval; send again later"}
         if message.startswith("Duplicate assistance"):
             return {"status": DUPLICATE, "reason": message}
+        if message.startswith(REFUSAL_PREFIX):
+            return {"status": NOT_AUTHENTICATED, "reason": message}
         if getattr(err, "code", None) is not None:  # a rule of the registry refused it
             return {"status": REJECTED, "reason": message}
         _logger.exception("handover approval failed")
@@ -119,12 +128,10 @@ class HandoverSyncService:
         return await HandoverSyncService._existing(session, ref)
 
     @staticmethod
-    async def _partner_active(session, code: str) -> bool:
-        from ..register_domain.models import G2PRegisterPartner as Partner
+    async def _partner_standing(session, code: str):
+        from ..register_domain.services.utils.partner_standing import partner_standing
 
-        n = (await session.execute(select(func.count()).select_from(Partner).where(
-            Partner.partner_code == code, Partner.record_status == "ACTIVE"))).scalar()
-        return bool(n)
+        return await partner_standing(session, code)
 
     @staticmethod
     async def _individuals(session, progres_id: str) -> list[str]:
