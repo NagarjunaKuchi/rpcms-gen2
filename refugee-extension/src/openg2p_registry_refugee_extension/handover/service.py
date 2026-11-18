@@ -9,9 +9,10 @@ creator and approver of every record.
 One record per transaction: a bad record never blocks the others, and a failure leaves no half-created request."""
 import logging
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 
 from ..rules import handover_sync as rules
+from ..rules.partner_gate import refusal as partner_refusal
 from ..rules.progres_confirmation import REFUSAL_PREFIX
 
 _logger = logging.getLogger("rpcms-handover-sync")
@@ -65,8 +66,12 @@ class HandoverSyncService:
                 existing = await self._existing(session, ref)
                 if existing:
                     return {**out, "status": ALREADY, "record_id": existing}
-                if not await self._partner_active(session, row["partner_code"]):
+                standing = await self._partner_standing(session, row["partner_code"])
+                if standing is None:
                     return {**out, "status": REJECTED, "reason": f"partner {row['partner_code']} is not an active partner in RPCMS"}
+                problem = partner_refusal(row["partner_code"], standing[0], standing[1], "assistance")
+                if problem:  # checked before anything is created; the approval step checks it again
+                    return {**out, "status": REJECTED, "reason": problem}
                 individuals = await self._individuals(session, row["registrant_progres_id"])
                 if len(individuals) != 1:
                     why = "is not registered in RPCMS" if not individuals else "matches more than one registrant in RPCMS"
@@ -123,12 +128,10 @@ class HandoverSyncService:
         return await HandoverSyncService._existing(session, ref)
 
     @staticmethod
-    async def _partner_active(session, code: str) -> bool:
-        from ..register_domain.models import G2PRegisterPartner as Partner
+    async def _partner_standing(session, code: str):
+        from ..register_domain.services.utils.partner_standing import partner_standing
 
-        n = (await session.execute(select(func.count()).select_from(Partner).where(
-            Partner.partner_code == code, Partner.record_status == "ACTIVE"))).scalar()
-        return bool(n)
+        return await partner_standing(session, code)
 
     @staticmethod
     async def _individuals(session, progres_id: str) -> list[str]:

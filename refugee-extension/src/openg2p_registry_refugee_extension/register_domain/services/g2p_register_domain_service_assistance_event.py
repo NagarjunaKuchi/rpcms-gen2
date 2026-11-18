@@ -8,8 +8,10 @@ from openg2p_registry_core.services import G2PRegisterDomainService
 from ...integrations import get_integrations
 from ...rules.assistance_duplicates import DEDUP_KEYS, first_duplicate_within, key_of
 from ...rules.assistance_duplicates import message as duplicate_message
+from ...rules.partner_gate import refusal as refusal_partner
 from ...rules.progres_confirmation import confirmation_fields, must_be_confirmed, refusal, strip_registry_only
 from ...rules.service_point_overlap import valid_coordinates
+from .utils.partner_standing import partner_standing
 from .utils.validations import as_float, parse_date, validation_error
 
 _logger = logging.getLogger("g2p-register-assistanceevent-service")
@@ -126,6 +128,15 @@ class G2PRegisterDomainServiceAssistanceEvent(G2PRegisterDomainService):
         # ProGres being unavailable does not block recording: the column stays empty, so "not checked" is never
         # shown as "No". (Whether an outage should block is an open question for OPM/UNHCR.)
         rows = list((payload.change_payload if payload else None) or [])
+        # Assistance is recorded only for a partner that has not failed its compliance check (new rows only).
+        for row in rows:
+            code = str(row.get("partner_code") or "").strip()
+            if row.get("edit_action") in (None, "ADD") and code:
+                standing = await partner_standing(session, code)
+                problem = standing and refusal_partner(code, standing[0], standing[1], "assistance")
+                if problem:
+                    _logger.warning("assistance refused: partner %s is not compliant", code)
+                    validation_error(problem)
         changed = False
         for row in rows:
             if strip_registry_only(row):

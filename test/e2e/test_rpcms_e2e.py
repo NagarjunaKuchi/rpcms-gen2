@@ -585,3 +585,20 @@ def test_dashboard_charts_show_the_registered_data():
         # The dashboard's database role sees the reporting views and nothing else.
         dash = c.get("/api/v1/dashboard/rpcms-national", headers=h)
         assert dash.status_code == 200 and dash.json()["result"]["published"] is True
+
+
+def test_non_compliant_partner_cannot_have_a_project_or_a_handover(staff, cfg):
+    code = register_partner(staff, cfg, "Unregistered Relief Org", "11111111111111", "NGO/PMT/0000/0000")
+    assert partner_record(staff, code)["compliance_status"] == "NON_COMPLIANT"
+    with pytest.raises(StaffApiError) as refused:  # refused when the project form is saved
+        register_project(staff, cfg, partner_code=code)
+    assert "Partner is not compliant" in str(refused.value)
+
+    handover = dict(client_record_id="PH-" + uuid.uuid4().hex[:8], registrant_progres_id="UGA-" + str(uuid.uuid4().int)[:8],
+                    partner_code=code, assistance_type="CASH_FOR_FOOD", distribution_cycle="C-" + uuid.uuid4().hex[:6],
+                    delivery_date=date.today().isoformat(), amount=150000, currency="UGX", delivery_location="Zone 3, Point A",
+                    officer="Emmanuel Taban", captured_at=date.today().isoformat() + "T08:42:00+00:00",
+                    gps_latitude=3.4719, gps_longitude=31.3547, gps_accuracy_m=8)
+    status, body = sync_call(staff, "B-" + uuid.uuid4().hex[:6], [handover])
+    assert status == 200 and body["results"][0]["status"] == "REJECTED", body
+    assert "Partner is not compliant" in body["results"][0]["reason"]

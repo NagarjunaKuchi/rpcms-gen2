@@ -6,7 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from openg2p_registry_core.services import G2PRegisterDomainService
 
 from ...integrations import get_integrations
+from ...rules.partner_gate import refusal
 from ...rules.project_funding import evaluate_funding
+from .utils.partner_standing import partner_standing
 from .utils.validations import as_float, as_int, parse_date, validation_error
 
 _logger = logging.getLogger("g2p-register-project-service")
@@ -37,6 +39,25 @@ class G2PRegisterDomainServiceProject(G2PRegisterDomainService):
             start, end = parse_date(record.get("start_date")), parse_date(record.get("end_date"))
             if start and end and end < start:
                 validation_error("end_date must not be before start_date")
+        await self._check_partner_standing(records)
+
+    async def _check_partner_standing(self, records: list[dict]) -> None:
+        """A project is recorded only for a partner that has not failed its compliance check. Runs when the form or
+        change request is saved (new projects arrive by intake form, which has no approval hook). An unknown partner
+        code is not refused here."""
+        from openg2p_fastapi_common.context import get_async_session_maker
+
+        wanted = {str(r.get("partner_code") or "").strip() for r in records
+                  if r.get("edit_action") in (None, "ADD", "UPDATE")} - {""}
+        if not wanted:
+            return
+        async with get_async_session_maker()() as session:
+            for code in sorted(wanted):
+                standing = await partner_standing(session, code)
+                problem = standing and refusal(code, standing[0], standing[1], "a project")
+                if problem:
+                    _logger.warning("project refused: partner %s is not compliant", code)
+                    validation_error(problem)
 
     async def post_ingest(self, register_id: str, register_row, session: AsyncSession):
         """After an approved registration: ask AMP for the funding record and store the comparison on the project."""
