@@ -288,12 +288,12 @@ def test_mou_is_verified_then_flagged_when_altered(staff, cfg):
     assert change(staff, cfg, project, tab, sec, MOU, dict(mou_number=ref, ugpass_document_id=doc), "ADD", ref, register=PROJECT) == "APPROVED"
     row = wait_for(lambda: next((r for r in rows(staff, project, tab, MOU, PROJECT) if r.get("verification_status")), None), what="MoU verification")
     assert row["verification_status"] == "VALID" and row["signatures_count"] == 3 and row["eseals_count"] == 2
-    assert row["document_sha256"] and row["verified_on"]
+    assert row["document_sha256"] and row["verified_on"] and row["mou_status"] == "SIGNED"
     # someone edits the signed document: re-checking (an edit of the row) must now report it
     mock_post(f"/ugpass/v1/documents/{doc}/tamper", {"text": "changed amount"})
     assert change(staff, cfg, project, tab, sec, MOU, dict(internal_record_id=row["internal_record_id"], remarks="re-check"), "UPDATE", ref, register=PROJECT) == "APPROVED"
     bad = wait_for(lambda: next((r for r in rows(staff, project, tab, MOU, PROJECT) if r.get("verification_status") == "INVALID"), None), what="INVALID after tamper")
-    assert "changed after signing" in bad["verification_notes"]
+    assert "changed after signing" in bad["verification_notes"] and bad["mou_status"] == "AWAITING_SIGNATURES"  # no longer signed
 
 
 def test_mou_with_missing_signatures_is_incomplete_and_unknown_document_not_found(staff, cfg):
@@ -306,6 +306,7 @@ def test_mou_with_missing_signatures_is_incomplete_and_unknown_document_not_foun
                    and all(x.get("verification_status") for x in r.values()) and r, what="both MoUs checked")
     assert got[a]["verification_status"] == "INCOMPLETE" and "1 of 3 signatures" in got[a]["verification_notes"]
     assert got[b]["verification_status"] == "NOT_FOUND"
+    assert got[a]["mou_status"] == "AWAITING_SIGNATURES" and got[b]["mou_status"] == "DRAFT"
 
 
 def test_service_point_overlap_between_partners_is_flagged_and_clears_when_moved(staff, cfg):

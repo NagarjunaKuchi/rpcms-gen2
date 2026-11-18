@@ -14,6 +14,7 @@ class G2PSchemaProjectMou:
     expected_signatures: Optional[int] = None
     expected_eseals: Optional[int] = None
     remarks: Optional[str] = None
+    mou_status: Optional[str] = None
     verification_status: Optional[str] = None
     signatures_count: Optional[int] = None
     eseals_count: Optional[int] = None

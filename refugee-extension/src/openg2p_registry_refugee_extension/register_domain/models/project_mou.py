@@ -16,6 +16,7 @@ class G2PProjectMou:
     expected_signatures: Mapped[int] = mapped_column(Integer, nullable=True)
     expected_eseals: Mapped[int] = mapped_column(Integer, nullable=True)
     remarks: Mapped[str] = mapped_column(String, nullable=True)
+    mou_status: Mapped[str] = mapped_column(String, nullable=True, index=True)  # DRAFT / AWAITING_SIGNATURES / SIGNED, set by the registry
     verification_status: Mapped[str] = mapped_column(String, nullable=True, index=True)
     signatures_count: Mapped[int] = mapped_column(Integer, nullable=True)
     eseals_count: Mapped[int] = mapped_column(Integer, nullable=True)
