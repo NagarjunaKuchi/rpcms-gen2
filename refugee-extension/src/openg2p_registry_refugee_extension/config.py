@@ -50,6 +50,7 @@ class Settings(CoreSettings):
 
     # --- business rules ----------------------------------------------------------------------------------
     permit_renewal_alert_days: int = 60  # alert this many days before an NGO permit expires
+    report_approver_must_differ: bool = True  # the person who approves a quarter's figures cannot also send them
     id_expiry_alert_days: int = 60  # flag a refugee ID and send the renewal SMS this many days before the card expires
     mou_expected_signatures: int = 3  # personal signatures an MoU needs before it counts as fully signed
     mou_expected_eseals: int = 2  # organisation e-Seals an MoU needs

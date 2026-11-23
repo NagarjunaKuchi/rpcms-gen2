@@ -44,3 +44,20 @@ class RpcmsReportSubmission(BaseORMModel):
     records_sent: Mapped[int] = mapped_column(Integer, nullable=True)
     payload_sha256: Mapped[str] = mapped_column(String, nullable=True)
     detail: Mapped[str] = mapped_column(Text, nullable=True)
+
+
+class RpcmsReportApproval(BaseORMModel):
+    """An approver's approval of one quarter's figures for AMP or NIMES, tied to a fingerprint of those exact figures.
+    Sending needs an unused approval that still matches; a successful send uses it up."""
+
+    __tablename__ = "rpcms_report_approval"
+
+    approval_id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    system: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    quarter: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    payload_sha256: Mapped[str] = mapped_column(String, nullable=False)
+    records: Mapped[int] = mapped_column(Integer, nullable=True)
+    approved_by: Mapped[str] = mapped_column(String, nullable=False)
+    approved_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    note: Mapped[str] = mapped_column(String, nullable=True)
+    used_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)

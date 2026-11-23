@@ -95,7 +95,8 @@ INSERT INTO staff_portal_applications
       (202, 100, 'rpcmsHandover:sync',             'rpcmsHandover:sync',             true, NOW(), NOW()),
       (203, 100, 'rpcmsJobs:run',                  'rpcmsJobs:run',                  true, NOW(), NOW()),
       (204, 100, 'rpcmsReferral:view',             'rpcmsReferral:view',             true, NOW(), NOW()),
-      (205, 100, 'rpcmsReferral:review',           'rpcmsReferral:review',           true, NOW(), NOW())
+      (205, 100, 'rpcmsReferral:review',           'rpcmsReferral:review',           true, NOW(), NOW()),
+      (206, 100, 'rpcmsReport:approve',            'rpcmsReport:approve',            true, NOW(), NOW())
     ON CONFLICT (id) DO NOTHING;
 
     INSERT INTO staff_roles (id, application_id, role_mnemonic, role_description, active, created_at, updated_at)

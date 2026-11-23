@@ -12,6 +12,13 @@ _logger = logging.getLogger("rpcms-reporting")
 
 VIEW = {"rpcmsReport:view"}
 SUBMIT = {"rpcmsReport:submit"}
+APPROVE = {"rpcmsReport:approve"}
+
+
+class ApproveRequest(BaseModel):
+    system: str  # AMP | NIMES
+    quarter: str  # 2026-Q3
+    note: str | None = None
 
 
 class SubmitRequest(BaseModel):
@@ -32,6 +39,7 @@ class RpcmsReportController(BaseController):
         self.router.prefix = "/rpcms-reports"
         self.router.add_api_route("/summary", self.summary, methods=["GET"], operation_id="rpcms_report_summary")
         self.router.add_api_route("/preview", self.preview, methods=["GET"], operation_id="rpcms_report_preview")
+        self.router.add_api_route("/approve", self.approve, methods=["POST"], operation_id="rpcms_report_approve")
         self.router.add_api_route("/submit", self.submit, methods=["POST"], operation_id="rpcms_report_submit")
         self.router.add_api_route("/submissions", self.submissions, methods=["GET"], operation_id="rpcms_report_submissions")
 
@@ -55,6 +63,12 @@ class RpcmsReportController(BaseController):
     async def preview(self, system: str, quarter: str):
         """What would be sent to AMP or NIMES for a quarter, and what cannot be sent and why. Sends nothing."""
         return await self._guard(lambda: get_reporting_service().preview(system, quarter))
+
+    @require_permissions(APPROVE)
+    async def approve(self, body: ApproveRequest, request: Request):
+        """Approve the figures as the preview shows them now. Sending needs this, and figures that change afterwards
+        need approving again."""
+        return await self._guard(lambda: get_reporting_service().approve(body.system, body.quarter, _actor(request), body.note))
 
     @require_permissions(SUBMIT)
     async def submit(self, body: SubmitRequest, request: Request):

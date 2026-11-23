@@ -500,6 +500,9 @@ services:
       REGISTRY_EXTENSIONS_NIMES_BASE_URL: http://mocks:8000
       # Report endpoints (/rpcms-reports) live on the staff API only.
       REGISTRY_EXTENSIONS_REPORTING_API_ENABLED: "true"
+      # Development only: the e2e tests approve and send with one login. Leave this out (default true) elsewhere, so the
+      # person who approves a quarter's figures cannot also send them.
+      REGISTRY_EXTENSIONS_REPORT_APPROVER_MUST_DIFFER: "false"
     ports:
       - "18082:8000"
     depends_on:
