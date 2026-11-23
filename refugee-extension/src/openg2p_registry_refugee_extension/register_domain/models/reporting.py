@@ -20,6 +20,13 @@ class RpcmsDuplicateAttempt(BaseORMModel):
     distribution_cycle: Mapped[str] = mapped_column(String, nullable=True)
     partner_code: Mapped[str] = mapped_column(String, nullable=True, index=True)
     reason: Mapped[str] = mapped_column(String, nullable=True)
+    holder_progres_id: Mapped[str] = mapped_column(String, nullable=True)  # who already received it (a household member)
+    # Referral: every refused duplicate is a case to review. OPEN -> CONFIRMED_DUPLICATE or RELEASED (decided once).
+    review_status: Mapped[str] = mapped_column(String, nullable=False, default="OPEN", server_default="OPEN", index=True)
+    reviewed_by: Mapped[str] = mapped_column(String, nullable=True)
+    reviewed_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    review_note: Mapped[str] = mapped_column(String, nullable=True)
+    released_used_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)  # a release lets the entry through once
 
 
 class RpcmsReportSubmission(BaseORMModel):

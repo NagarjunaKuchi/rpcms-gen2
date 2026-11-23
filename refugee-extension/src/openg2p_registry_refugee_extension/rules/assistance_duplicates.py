@@ -25,3 +25,14 @@ def first_duplicate_within(rows: list[dict]) -> tuple | None:
 
 def message(key: tuple) -> str:
     return f"Duplicate assistance: registrant {key[0]} already received {key[1]} in cycle {key[2]}"
+
+
+def household_message(key: tuple, holder: str) -> str:
+    """The refusal when another member of the registrant's household already received this assistance."""
+    return (f"Duplicate assistance: household member {holder} already received {key[1]} in cycle {key[2]} "
+            f"(household of registrant {key[0]})")
+
+
+def with_referral(text: str, case_ref: str | None) -> str:
+    """The refusal, plus the referral case it created, so the person entering it knows it went to review."""
+    return f"{text}; referred for review as case {case_ref}" if case_ref else text

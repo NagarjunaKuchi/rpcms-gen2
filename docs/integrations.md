@@ -60,3 +60,9 @@ Two checks run together, on staff-API permission `rpcmsJobs:run`; running them t
 
 ## Budget lock
 Once a project has an active MoU whose status is `SIGNED`, a change request that gives the project value, currency, target households or household rate a different value is refused when it is created ("Project budget is locked ..."). Repeating the stored value is not a change; every other project field stays editable. If the MoU later stops being `SIGNED` (for example the document is altered), the lock lifts. New projects have no MoU, so a project can still be recorded before signing: whether it should not be is an open question in the build document.
+
+## Duplicate assistance and referral
+- **Rule:** a registrant, or any other member of the registrant's household, cannot receive the same assistance type twice in the same cycle, whichever partner records it. A household is the individuals linked to the same household record; a registrant with no household, or no ProGres ID on their individual record, is checked alone. The cycle is still free text, so partners must use the same cycle label (an open question in the build document).
+- **Referral:** a refused duplicate is also a case, `OPEN` until a reviewer decides it. The refusal tells the person entering it the case reference. `GET /rpcms-referrals?status=OPEN` lists cases (permission `rpcmsReferral:view`); `POST /rpcms-referrals/{case_id}/review` with `{"decision": "CONFIRM" | "RELEASE", "note": "..."}` decides one (permission `rpcmsReferral:review`). `CONFIRM` keeps it refused. `RELEASE` needs a note and lets that exact entry (registrant, type, cycle) be recorded once. A case is decided once.
+- **Not decided:** who reviews and how fast. Today any user with the review permission can decide a case, including one who made the entry. Reviewing from the staff screen is not built; it is API only.
+
