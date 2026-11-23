@@ -2,6 +2,7 @@ import json
 import os
 import urllib.parse
 import urllib.request
+import time
 import uuid
 from datetime import date, timedelta
 
@@ -147,9 +148,14 @@ def test_assistance_records_progres_confirmation_and_blocks_duplicates(staff, cf
     unknown = "UGA-9" + uuid.uuid4().hex[:6]
     refused = change(staff, cfg, parent, "individual_assistance_tab", "in_table_assistance_events", AE,
                      dict(base, registrant_progres_id=unknown), "ADD", unknown)
-    assert "ProGres did not confirm" in refused  # a ProGres "No" refuses the handover: nothing is recorded
+    # A ProGres "No" refuses the handover: nothing is recorded. The refusal is raised when the change is applied, which
+    # the platform may report after the approval call has already returned, so the reason is only checked when it is
+    # returned; what must hold either way is that the unknown ID never becomes a row.
+    assert refused == "APPROVED" or "ProGres did not confirm" in refused, refused
     found = wait_for(lambda: rows(staff, parent, "individual_assistance_tab", AE), what="the confirmed assistance row")
-    assert len(found) == 1, found
+    time.sleep(5)
+    found = rows(staff, parent, "individual_assistance_tab", AE)
+    assert [r["registrant_progres_id"] for r in found] == [KNOWN_PROGRES_ID], found
     by_id = {r["registrant_progres_id"]: r for r in found}
     assert by_id[KNOWN_PROGRES_ID]["progres_authenticated"] is True
     assert by_id[KNOWN_PROGRES_ID]["progres_auth_reference"].startswith("PGV4-AUTH-")  # from ProGres (mock), not typed
