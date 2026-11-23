@@ -640,3 +640,42 @@ def test_daily_check_flags_an_expiring_id_once_and_sends_the_renewal_sms(staff, 
     assert any("expires on " + expiry in m["text"] for m in sms_to(phone))
     status, body = jobs_call(staff)  # running it again flags no one twice
     assert status == 200 and len(rows(staff, parent, "individual_id_renewal_tab", IR)) == 1, body
+
+
+def referral_call(staff, method, path, body=None):
+    staff._refresh_auth_header()
+    r = staff._client.request(method, path, json=body)
+    try:
+        return r.status_code, r.json()
+    except ValueError:
+        return r.status_code, {"raw": r.text}
+
+
+def test_duplicate_becomes_a_referral_and_a_release_lets_one_entry_through(staff, cfg):
+    import re
+
+    parent = person(staff, cfg, "+256700000222")
+    cycle = "2026-" + uuid.uuid4().hex[:4]
+    row = dict(partner_code="NHU", partner_name="Nile Hope Uganda", assistance_type="CASH_FOR_FOOD", distribution_cycle=cycle,
+               registrant_progres_id=KNOWN_PROGRES_ID)
+    enter = lambda: change(staff, cfg, parent, "individual_assistance_tab", "in_table_assistance_events", AE, row, "ADD", KNOWN_PROGRES_ID)
+    assert enter() == "APPROVED"
+    refused = enter()
+    assert "Duplicate assistance" in refused and "referred for review as case" in refused, refused
+    case_ref = re.search(r"case ([0-9a-f]{8})", refused).group(1)
+
+    status, cases = referral_call(staff, "GET", "/rpcms-referrals?status=OPEN")
+    mine = [c for c in cases if c["case_ref"] == case_ref]
+    assert status == 200 and len(mine) == 1 and mine[0]["distribution_cycle"] == cycle and mine[0]["status"] == "OPEN", cases
+    case_id = mine[0]["case_id"]
+
+    status, body = referral_call(staff, "POST", f"/rpcms-referrals/{case_id}/review", {"decision": "RELEASE"})
+    assert status == 400 and "note is required" in str(body)  # releasing needs a reason
+    status, body = referral_call(staff, "POST", f"/rpcms-referrals/{case_id}/review",
+                                 {"decision": "RELEASE", "note": "Second partner delivered a different item"})
+    assert status == 200 and body["status"] == "RELEASED" and body["reviewed_by"], body
+    status, body = referral_call(staff, "POST", f"/rpcms-referrals/{case_id}/review", {"decision": "CONFIRM"})
+    assert status == 409, body  # a case is decided once
+
+    assert enter() == "APPROVED"  # the release lets this one entry through
+    assert "Duplicate assistance" in enter()  # and only one

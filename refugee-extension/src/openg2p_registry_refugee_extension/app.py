@@ -213,6 +213,12 @@ class Initializer(BaseInitializer):
                 RpcmsJobsController().post_init()
             except Exception:
                 _logger.exception("Could not register the /rpcms-jobs endpoints")
+            try:
+                from .referrals.controller import RpcmsReferralController
+
+                RpcmsReferralController().post_init()
+            except Exception:
+                _logger.exception("Could not register the /rpcms-referrals endpoints")
 
     def migrate_database(self, args):
 

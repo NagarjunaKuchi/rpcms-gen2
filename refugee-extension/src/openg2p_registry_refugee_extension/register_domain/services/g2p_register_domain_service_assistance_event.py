@@ -7,6 +7,7 @@ from openg2p_registry_core.services import G2PRegisterDomainService
 
 from ...integrations import get_integrations
 from ...rules.assistance_duplicates import DEDUP_KEYS, first_duplicate_within, key_of
+from ...rules.assistance_duplicates import household_message, with_referral
 from ...rules.assistance_duplicates import message as duplicate_message
 from ...rules.partner_gate import refusal as refusal_partner
 from ...rules.progres_confirmation import confirmation_fields, must_be_confirmed, refusal, strip_registry_only
@@ -78,33 +79,76 @@ class G2PRegisterDomainServiceAssistanceEvent(G2PRegisterDomainService):
             if log:
                 await self._log_duplicate(within, "repeated within one request")
             validation_error("Duplicate assistance in this request: same registrant, assistance type and cycle")
-        for _, key, own_id in candidates:
-            query = select(Event.internal_record_id).where(
-                Event.registrant_progres_id == key[0],
-                Event.assistance_type == key[1],
-                Event.distribution_cycle == key[2],
-            )
-            if own_id:
-                query = query.where(Event.internal_record_id != own_id)
-            if (await session.execute(query.limit(1))).first():
-                if log:
-                    await self._log_duplicate(key, "already recorded")
-                validation_error(duplicate_message(key))
+        for merged, key, own_id in candidates:
+            holder = await self._find_holder(session, key, own_id)
+            if holder is None:
+                continue
+            if await self._released(session, key, consume=not log):
+                continue  # a reviewer released this exact entry: it goes through once
+            text = duplicate_message(key) if holder == key[0] else household_message(key, holder)
+            case = await self._log_duplicate(key, "already recorded", merged.get("partner_code"), holder) if log else None
+            validation_error(with_referral(text, case[:8] if case else None))
 
-    async def _log_duplicate(self, key: tuple, reason: str) -> None:
-        """Keep a record of a refused duplicate (the dashboard counts them). Own session and commit, because the
-        caller's request is about to be rejected. A failure here must never change the rejection itself."""
+    @staticmethod
+    async def _find_holder(session, key: tuple, own_id: str | None) -> str | None:
+        """The ProGres ID of whoever already received this assistance type in this cycle: the registrant, or another
+        member of the registrant's household (members are the individuals linked to the same household record).
+        A registrant with no household is checked alone."""
+        from ..models import G2PRegisterAssistanceEvent as Event
+        from ..models import G2PRegisterIndividual as Individual
+
+        members = {key[0]}
+        household = (await session.execute(select(Individual.link_internal_record_id).where(
+            Individual.progres_id == key[0], Individual.record_status == "ACTIVE").limit(1))).scalar()
+        if household:
+            members |= set((await session.execute(select(Individual.progres_id).where(
+                Individual.link_internal_record_id == household, Individual.record_status == "ACTIVE",
+                Individual.progres_id.is_not(None)))).scalars())
+        query = select(Event.registrant_progres_id).where(
+            Event.registrant_progres_id.in_(members), Event.assistance_type == key[1],
+            Event.distribution_cycle == key[2]).order_by((Event.registrant_progres_id == key[0]).desc())
+        if own_id:
+            query = query.where(Event.internal_record_id != own_id)
+        return (await session.execute(query.limit(1))).scalar()
+
+    @staticmethod
+    async def _released(session, key: tuple, consume: bool) -> bool:
+        """True when a reviewer has released this exact entry and the release has not been used. At approval
+        (consume=True) the release is marked used, so it lets one entry through, not every later one."""
+        from datetime import datetime
+
+        from ..models import RpcmsDuplicateAttempt as Attempt
+
+        case = (await session.execute(select(Attempt).where(
+            Attempt.registrant_progres_id == key[0], Attempt.assistance_type == key[1],
+            Attempt.distribution_cycle == key[2], Attempt.review_status == "RELEASED",
+            Attempt.released_used_at.is_(None)).order_by(Attempt.reviewed_at).limit(1))).scalar()
+        if case is None:
+            return False
+        if consume:
+            case.released_used_at = datetime.utcnow()
+        return True
+
+    async def _log_duplicate(self, key: tuple, reason: str, partner_code: str | None = None,
+                             holder: str | None = None) -> str | None:
+        """Keep a record of a refused duplicate: the dashboard counts them and each is a case for review. Own session
+        and commit, because the caller's request is about to be rejected. A failure here must never change the
+        rejection itself. Returns the case id, or None."""
         try:
             from openg2p_fastapi_common.context import get_async_session_maker
 
             from ..models import RpcmsDuplicateAttempt
 
             async with get_async_session_maker()() as log_session:
-                log_session.add(RpcmsDuplicateAttempt(registrant_progres_id=key[0], assistance_type=key[1],
-                                                      distribution_cycle=key[2], reason=reason))
+                case = RpcmsDuplicateAttempt(registrant_progres_id=key[0], assistance_type=key[1], distribution_cycle=key[2],
+                                             partner_code=partner_code, holder_progres_id=holder, reason=reason,
+                                             review_status="OPEN")
+                log_session.add(case)
                 await log_session.commit()
+                return case.attempt_id
         except Exception:
             _logger.exception("Could not record the refused duplicate")
+            return None
 
     async def pre_approve(self, change_request, session):
         # Imported lazily: models import this service module.
