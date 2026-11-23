@@ -531,7 +531,7 @@ def test_field_handovers_sync_once_with_gps_and_the_same_rules(staff, cfg):
     cycle = "C-" + uuid.uuid4().hex[:6]
     base = dict(registrant_progres_id=pid, partner_code=code, assistance_type="CASH_FOR_FOOD", distribution_cycle=cycle,
                 delivery_date=date.today().isoformat(), amount=150000, currency="UGX", delivery_location="Zone 3, Point A",
-                officer="Emmanuel Taban", captured_at=date.today().isoformat() + "T08:42:00+00:00",
+                officer="Emmanuel Taban", captured_at=date.today().isoformat() + "T00:01:00+00:00",
                 gps_latitude=3.4719, gps_longitude=31.3547, gps_accuracy_m=8)
     good = dict(base, client_record_id="PH-" + uuid.uuid4().hex[:8])
     batch = "B-" + uuid.uuid4().hex[:6]
@@ -619,7 +619,7 @@ def test_non_compliant_partner_cannot_have_a_project_or_a_handover(staff, cfg):
     handover = dict(client_record_id="PH-" + uuid.uuid4().hex[:8], registrant_progres_id="UGA-" + str(uuid.uuid4().int)[:8],
                     partner_code=code, assistance_type="CASH_FOR_FOOD", distribution_cycle="C-" + uuid.uuid4().hex[:6],
                     delivery_date=date.today().isoformat(), amount=150000, currency="UGX", delivery_location="Zone 3, Point A",
-                    officer="Emmanuel Taban", captured_at=date.today().isoformat() + "T08:42:00+00:00",
+                    officer="Emmanuel Taban", captured_at=date.today().isoformat() + "T00:01:00+00:00",
                     gps_latitude=3.4719, gps_longitude=31.3547, gps_accuracy_m=8)
     status, body = sync_call(staff, "B-" + uuid.uuid4().hex[:6], [handover])
     assert status == 200 and body["results"][0]["status"] == "REJECTED", body

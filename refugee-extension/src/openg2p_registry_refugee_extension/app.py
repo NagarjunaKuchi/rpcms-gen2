@@ -71,6 +71,7 @@ from .register_domain.models import (
     G2PRegisterHistoryIndividualVulnerability,
     G2PIntakeFormIndividualVulnerability,
     RpcmsDuplicateAttempt,
+    RpcmsReportApproval,
     RpcmsReportSubmission,
 )
 from .register_domain.services import (
@@ -140,6 +141,7 @@ MODELS = [
     G2PRegisterHistorySelfRelianceSurvey,
     G2PIntakeFormSelfRelianceSurvey,
     RpcmsDuplicateAttempt,
+    RpcmsReportApproval,
     RpcmsReportSubmission,
 ]
 
