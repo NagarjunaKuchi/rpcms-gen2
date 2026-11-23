@@ -8,6 +8,7 @@ from datetime import datetime
 from sqlalchemy import text
 
 from ..integrations import Outcome, get_integrations
+from ..rules import report_approval
 from ..rules import reporting as rules
 
 _logger = logging.getLogger("rpcms-reporting")
@@ -22,8 +23,9 @@ class ReportingError(Exception):
 
 
 class ReportingService:
-    def __init__(self, session_maker):
+    def __init__(self, session_maker, approver_must_differ: bool | None = None):
         self._session_maker = session_maker
+        self._must_differ = approver_must_differ  # None: read the setting when needed
 
     # ---- figures ------------------------------------------------------------------------------------------
     async def summary(self, quarter: str) -> dict:
@@ -79,9 +81,51 @@ class ReportingService:
         system = self._system(system)
         if system == "AMP":
             payload, unmatched = await self.expenditure(quarter)
-            return {"system": system, "payload": payload, "not_sent": unmatched}
-        summary = await self.summary(quarter)
-        return {"system": system, "payload": rules.build_indicators(quarter, summary), "basis": summary}
+            built = {"system": system, "payload": payload, "not_sent": unmatched}
+        else:
+            summary = await self.summary(quarter)
+            built = {"system": system, "payload": rules.build_indicators(quarter, summary), "basis": summary}
+        built["payload_sha256"] = rules.payload_digest(built["payload"])
+        approval = await self._latest_approval(system, quarter)
+        built["approval"] = None if approval is None else {
+            "approved_by": approval["approved_by"], "approved_at": approval["approved_at"].isoformat(),
+            "matches_these_figures": approval["payload_sha256"] == built["payload_sha256"]}
+        return built
+
+    def _approver_must_differ(self) -> bool:
+        if self._must_differ is not None:
+            return self._must_differ
+        from ..config import Settings  # imported here so this module stays importable without the platform
+
+        return Settings.get_config().report_approver_must_differ
+
+    # ---- approval -----------------------------------------------------------------------------------------
+    async def _latest_approval(self, system: str, quarter: str) -> dict | None:
+        async with self._session_maker() as s:
+            row = (await s.execute(text(
+                "SELECT approval_id, payload_sha256, approved_by, approved_at FROM rpcms_report_approval "
+                "WHERE system = :sys AND quarter = :q AND used_at IS NULL ORDER BY approved_at DESC LIMIT 1"),
+                {"sys": system, "q": quarter})).mappings().first()
+        return dict(row) if row else None
+
+    async def approve(self, system: str, quarter: str, actor: str, note: str | None = None) -> dict:
+        """Record that `actor` reviewed these exact figures and approves sending them. Sends nothing."""
+        system = self._system(system)
+        built = await self.preview(system, quarter)
+        payload = built["payload"]
+        records = len(payload.get("items", payload.get("indicators", [])))
+        if records == 0:
+            raise ReportingError(f"Nothing to approve for {system} for {quarter}", 409)
+        async with self._session_maker() as s:
+            await s.execute(text(
+                "INSERT INTO rpcms_report_approval (approval_id, system, quarter, payload_sha256, records, approved_by, "
+                "approved_at, note) VALUES (gen_random_uuid()::text, :system, :quarter, :sha, :n, :by, :at, :note)"),
+                {"system": system, "quarter": quarter, "sha": built["payload_sha256"], "n": records, "by": actor,
+                 "at": datetime.utcnow(), "note": (note or "").strip() or None})
+            await s.commit()
+        _logger.info("Report %s %s approved by %s", system, quarter, actor)
+        return {"system": system, "quarter": quarter, "records": records, "approved_by": actor,
+                "payload_sha256": built["payload_sha256"]}
 
     # ---- submission ---------------------------------------------------------------------------------------
     async def submit(self, system: str, quarter: str, actor: str, force: bool = False) -> dict:
@@ -103,6 +147,11 @@ class ReportingService:
                 f"{sent.external_reference}). Resubmitting may double count there; send with force=true only if "
                 f"{system} has confirmed it needs a resubmission.", 409)
 
+        approval = await self._latest_approval(system, quarter)
+        problem = report_approval.check(approval, digest, actor, self._approver_must_differ())
+        if problem:
+            raise ReportingError(problem, 409)
+
         client = get_integrations()
         result = await (client.submit_expenditure(payload) if system == "AMP" else client.submit_indicators(payload))
         if result.outcome is Outcome.OK and result.data.get("accepted", True):
@@ -118,6 +167,9 @@ class ReportingService:
                 "(gen_random_uuid()::text, :system, :quarter, :at, :by, :status, :ref, :n, :sha, :detail)"),
                 {"system": system, "quarter": quarter, "at": datetime.utcnow(), "by": actor, "status": status,
                  "ref": reference, "n": records if status == "SENT" else 0, "sha": digest, "detail": detail})
+            if status == "SENT":  # an approval covers one send; a resubmission needs a new one
+                await s.execute(text("UPDATE rpcms_report_approval SET used_at = :at WHERE approval_id = :id"),
+                                {"at": datetime.utcnow(), "id": approval["approval_id"]})
             await s.commit()
         _logger.info("Report %s %s submitted by %s: %s", system, quarter, actor, status)
         return {"system": system, "quarter": quarter, "status": status, "reference": reference, "records": records,

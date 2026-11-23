@@ -415,17 +415,29 @@ def test_quarterly_reports_preview_submit_and_do_not_double_count(staff, cfg):
     assert any(u["reason"] == "no AMP record number" for u in preview["not_sent"])
     assert all(i["amp_record"] for i in preview["payload"]["items"])
 
+    # Nothing is sent until someone has approved exactly these figures.
+    status, blocked = report_call(staff, "POST", "/submit", json={"system": "AMP", "quarter": q, "force": True})
+    assert status == 409 and "not been approved" in reason(blocked), blocked
+    assert report_call(staff, "POST", "/approve", json={"system": "AMP", "quarter": q, "note": "e2e"})[0] == 200
+    status, pv = report_call(staff, "GET", "/preview", params={"system": "AMP", "quarter": q})
+    assert pv["approval"]["matches_these_figures"] is True
+
     # forced, so the test also passes on a stack where an earlier run already sent this quarter
     status, sent = report_call(staff, "POST", "/submit", json={"system": "AMP", "quarter": q, "force": True})
     assert status == 200 and sent["status"] == "SENT" and sent["reference"].startswith("AMP-EXP-"), sent
     status, again = report_call(staff, "POST", "/submit", json={"system": "AMP", "quarter": q})
     assert status == 409 and "already accepted" in reason(again)
+    # an approval covers one send: a forced resubmission needs approving again
+    status, spent = report_call(staff, "POST", "/submit", json={"system": "AMP", "quarter": q, "force": True})
+    assert status == 409 and "not been approved" in reason(spent), spent
+    assert report_call(staff, "POST", "/approve", json={"system": "AMP", "quarter": q})[0] == 200
     status, forced = report_call(staff, "POST", "/submit", json={"system": "AMP", "quarter": q, "force": True})
     assert status == 200 and forced["status"] == "SENT"
 
     status, preview = report_call(staff, "GET", "/preview", params={"system": "NIMES", "quarter": q})
     codes = {i["code"]: i["value"] for i in preview["payload"]["indicators"]}
     assert codes["RPCMS-PERSONS-REACHED"] >= 1 and codes["RPCMS-EVENTS-AUTHENTICATED"] >= 1
+    assert report_call(staff, "POST", "/approve", json={"system": "NIMES", "quarter": q})[0] == 200
     status, nimes = report_call(staff, "POST", "/submit", json={"system": "NIMES", "quarter": q, "force": True})
     assert status == 200 and nimes["status"] == "SENT" and nimes["reference"].startswith("NIMES-"), nimes
 
@@ -440,6 +452,8 @@ def test_report_requests_are_validated(staff, cfg):
     # A quarter with no events has nothing to send, and says so rather than sending an empty report.
     status, body = report_call(staff, "POST", "/submit", json={"system": "AMP", "quarter": "2001-Q1"})
     assert status == 409 and "Nothing to send" in reason(body)
+    status, body = report_call(staff, "POST", "/approve", json={"system": "AMP", "quarter": "2001-Q1"})
+    assert status == 409 and "Nothing to approve" in reason(body)
 
 
 # ---------------------------------------------------------------- Self-reliance survey -------------------
