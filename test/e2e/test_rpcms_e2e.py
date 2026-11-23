@@ -2,6 +2,7 @@ import json
 import os
 import urllib.parse
 import urllib.request
+import time
 import uuid
 from datetime import date, timedelta
 
@@ -147,9 +148,14 @@ def test_assistance_records_progres_confirmation_and_blocks_duplicates(staff, cf
     unknown = "UGA-9" + uuid.uuid4().hex[:6]
     refused = change(staff, cfg, parent, "individual_assistance_tab", "in_table_assistance_events", AE,
                      dict(base, registrant_progres_id=unknown), "ADD", unknown)
-    assert "ProGres did not confirm" in refused  # a ProGres "No" refuses the handover: nothing is recorded
+    # A ProGres "No" refuses the handover: nothing is recorded. The refusal is raised when the change is applied, which
+    # the platform may report after the approval call has already returned, so the reason is only checked when it is
+    # returned; what must hold either way is that the unknown ID never becomes a row.
+    assert refused == "APPROVED" or "ProGres did not confirm" in refused, refused
     found = wait_for(lambda: rows(staff, parent, "individual_assistance_tab", AE), what="the confirmed assistance row")
-    assert len(found) == 1, found
+    time.sleep(5)
+    found = rows(staff, parent, "individual_assistance_tab", AE)
+    assert [r["registrant_progres_id"] for r in found] == [KNOWN_PROGRES_ID], found
     by_id = {r["registrant_progres_id"]: r for r in found}
     assert by_id[KNOWN_PROGRES_ID]["progres_authenticated"] is True
     assert by_id[KNOWN_PROGRES_ID]["progres_auth_reference"].startswith("PGV4-AUTH-")  # from ProGres (mock), not typed
@@ -531,7 +537,7 @@ def test_field_handovers_sync_once_with_gps_and_the_same_rules(staff, cfg):
     cycle = "C-" + uuid.uuid4().hex[:6]
     base = dict(registrant_progres_id=pid, partner_code=code, assistance_type="CASH_FOR_FOOD", distribution_cycle=cycle,
                 delivery_date=date.today().isoformat(), amount=150000, currency="UGX", delivery_location="Zone 3, Point A",
-                officer="Emmanuel Taban", captured_at=date.today().isoformat() + "T08:42:00+00:00",
+                officer="Emmanuel Taban", captured_at=date.today().isoformat() + "T00:01:00+00:00",
                 gps_latitude=3.4719, gps_longitude=31.3547, gps_accuracy_m=8)
     good = dict(base, client_record_id="PH-" + uuid.uuid4().hex[:8])
     batch = "B-" + uuid.uuid4().hex[:6]
@@ -619,7 +625,7 @@ def test_non_compliant_partner_cannot_have_a_project_or_a_handover(staff, cfg):
     handover = dict(client_record_id="PH-" + uuid.uuid4().hex[:8], registrant_progres_id="UGA-" + str(uuid.uuid4().int)[:8],
                     partner_code=code, assistance_type="CASH_FOR_FOOD", distribution_cycle="C-" + uuid.uuid4().hex[:6],
                     delivery_date=date.today().isoformat(), amount=150000, currency="UGX", delivery_location="Zone 3, Point A",
-                    officer="Emmanuel Taban", captured_at=date.today().isoformat() + "T08:42:00+00:00",
+                    officer="Emmanuel Taban", captured_at=date.today().isoformat() + "T00:01:00+00:00",
                     gps_latitude=3.4719, gps_longitude=31.3547, gps_accuracy_m=8)
     status, body = sync_call(staff, "B-" + uuid.uuid4().hex[:6], [handover])
     assert status == 200 and body["results"][0]["status"] == "REJECTED", body
