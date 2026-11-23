@@ -145,6 +145,11 @@ def test_assistance_records_progres_confirmation_and_blocks_duplicates(staff, cf
     base = dict(partner_code="NHU", partner_name="Nile Hope Uganda", assistance_type="CASH_FOR_FOOD", distribution_cycle=cycle)
     assert change(staff, cfg, parent, "individual_assistance_tab", "in_table_assistance_events", AE,
                   dict(base, registrant_progres_id=KNOWN_PROGRES_ID), "ADD", KNOWN_PROGRES_ID) == "APPROVED"
+    # A duplicate is refused when it is entered, so nothing is left pending. Done before the ProGres refusal below, which
+    # is raised when the change is applied and leaves that request waiting on this record until someone rejects it.
+    dup = change(staff, cfg, parent, "individual_assistance_tab", "in_table_assistance_events", AE,
+                 dict(base, registrant_progres_id=KNOWN_PROGRES_ID), "ADD", KNOWN_PROGRES_ID)
+    assert "Duplicate assistance" in dup
     unknown = "UGA-9" + uuid.uuid4().hex[:6]
     refused = change(staff, cfg, parent, "individual_assistance_tab", "in_table_assistance_events", AE,
                      dict(base, registrant_progres_id=unknown), "ADD", unknown)
@@ -160,9 +165,6 @@ def test_assistance_records_progres_confirmation_and_blocks_duplicates(staff, cf
     assert by_id[KNOWN_PROGRES_ID]["progres_authenticated"] is True
     assert by_id[KNOWN_PROGRES_ID]["progres_auth_reference"].startswith("PGV4-AUTH-")  # from ProGres (mock), not typed
     assert by_id[KNOWN_PROGRES_ID]["progres_authenticated_at"]
-    dup = change(staff, cfg, parent, "individual_assistance_tab", "in_table_assistance_events", AE,
-                 dict(base, registrant_progres_id=KNOWN_PROGRES_ID), "ADD", KNOWN_PROGRES_ID)
-    assert "Duplicate assistance" in dup
 
 
 # ---------------------------------------------------------------- ID renewal ---------------------------------
